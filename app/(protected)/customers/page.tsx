@@ -118,7 +118,7 @@ export default function CustomersPage() {
               <MagnifyingGlassIcon className="size-4 text-muted-foreground" />
             </InputGroupAddon>
             <InputGroupInput
-              placeholder="e.g. 6299388225 or 916299388225"
+              placeholder="e.g. 9876543210 or 919876543210"
               value={phoneFilter}
               onChange={(e) => setPhoneFilter(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && applyPhoneSearch()}

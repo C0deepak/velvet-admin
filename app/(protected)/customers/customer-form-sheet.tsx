@@ -156,7 +156,7 @@ export function CustomerFormSheet({
               </FieldLabel>
               <FieldContent>
                 <InputGroup>
-                  <InputGroupInput {...form.register('phone')} placeholder="6299388225" />
+                  <InputGroupInput {...form.register('phone')} placeholder="9876543210" />
                 </InputGroup>
                 <FieldError errors={fieldErr(form, 'phone')} />
               </FieldContent>

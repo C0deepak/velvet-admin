@@ -22,7 +22,6 @@ export function emptyCategoryMetadataForm(): CategoryMetadataForm {
   }
 }
 
-/** Map API category metadata into form state; missing branches use blank hourly / waiting placeholders. */
 export function apiMetadataToForm(m: CategoryMetadata | null | undefined): CategoryMetadataForm {
   const blank = emptyCategoryMetadataForm()
   const w = m?.waitingTimeConfig

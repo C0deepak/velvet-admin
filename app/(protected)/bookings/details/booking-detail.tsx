@@ -44,7 +44,7 @@ import {
   VehicleChargeType,
   specialRequestSchema,
 } from '../schema'
-import { BookingVehicleStatus } from '../../vehicles/schema'
+import { BookingVehicleStatus } from '../../fleet/vehicles/schema'
 import type {
   TBooking,
   TBookingVehicle,
@@ -70,11 +70,11 @@ import {
   cancelBooking,
   updatePaymentStatus,
 } from '../api'
-import { getCategories } from '../../categories/api'
-import { getVehiclesByCategory } from '../../vehicles/api'
+import { getCategories } from '../../fleet/categories/api'
+import { getVehiclesByCategory } from '../../fleet/vehicles/api'
 import { getChauffeurs } from '../../chauffeurs/api'
-import type { TCategory } from '../../categories/types'
-import type { TVehicle } from '../../vehicles/types'
+import type { TCategory } from '../../fleet/categories/types'
+import type { TVehicle } from '../../fleet/vehicles/types'
 import type { TChauffeur } from '../../chauffeurs/types'
 import { getApiErrorMessage } from '@/helper/api-error-message'
 

@@ -10,10 +10,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
-import { CategoryFormSheet } from '../../categories/category-form-sheet'
-import { CategoryActiveBadge } from '../../categories/category-badges'
-import { getCategories, toggleCategoryStatus } from '../../categories/api'
-import type { TCategory } from '../../categories/types'
+import { CategoryFormSheet } from './category-form-sheet'
+import { CategoryActiveBadge } from './category-badges'
+import { getCategories, toggleCategoryStatus } from './api'
+import type { TCategory } from './types'
 import { getApiErrorMessage } from '@/helper/api-error-message'
 
 const COLUMNS = ['Category', 'Base price (₹)', 'Status']

@@ -16,6 +16,7 @@ import {
   CarIcon,
   CarProfileIcon,
   GarageIcon,
+  PackageIcon,
   UserSoundIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
@@ -36,6 +37,7 @@ const navFleet = [
     items: [
       { title: 'Categories', url: '/fleet/categories', icon: GarageIcon },
       { title: 'Vehicles', url: '/fleet/vehicles', icon: CarIcon },
+      { title: 'Packages', url: '/fleet/packages', icon: PackageIcon },
     ],
   },
 ]

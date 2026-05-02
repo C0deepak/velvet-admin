@@ -59,6 +59,22 @@ const confirmPlaceFormSchema = z
 
 type TConfirmPlaceFormValues = z.infer<typeof confirmPlaceFormSchema>
 
+function parseCoordPair(text: string): { lat: number; lng: number } | null {
+  const parts = text.trim().split(',')
+  if (parts.length !== 2) return null
+  const a = Number(parts[0].trim())
+  const b = Number(parts[1].trim())
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+  const aIsValidLat = a >= -90 && a <= 90
+  const bIsValidLat = b >= -90 && b <= 90
+  const aIsValidLng = a >= -180 && a <= 180
+  const bIsValidLng = b >= -180 && b <= 180
+  if (aIsValidLat && bIsValidLng && !(bIsValidLat && aIsValidLng)) return { lat: a, lng: b }
+  if (bIsValidLat && aIsValidLng && !(aIsValidLat && bIsValidLng)) return { lat: b, lng: a }
+  if (aIsValidLat && bIsValidLat) return { lat: Math.min(a, b), lng: Math.max(a, b) }
+  return null
+}
+
 export type PlaceValue = {
   address: string
   placeId: string
@@ -274,6 +290,21 @@ export function PlaceSearch({
                   autoFocus
                   value={query}
                   onChange={(e) => onType(e.target.value)}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData('text')
+                    const parsed = parseCoordPair(text)
+                    if (parsed) {
+                      e.preventDefault()
+                      setSuggestionLabel(`${parsed.lat}, ${parsed.lng}`)
+                      setSelectedPlaceId('manual_coords')
+                      form.reset({
+                        address: '',
+                        latitude: String(parsed.lat),
+                        longitude: String(parsed.lng),
+                      })
+                      setScreen('confirm')
+                    }
+                  }}
                   placeholder="Type to search places…"
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
@@ -382,6 +413,19 @@ export function PlaceSearch({
                           placeholder="e.g. 28.6139"
                           aria-invalid={!!form.formState.errors.latitude}
                           {...form.register('latitude')}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData('text')
+                            const parsed = parseCoordPair(text)
+                            if (parsed) {
+                              e.preventDefault()
+                              form.setValue('latitude', String(parsed.lat), {
+                                shouldValidate: true,
+                              })
+                              form.setValue('longitude', String(parsed.lng), {
+                                shouldValidate: true,
+                              })
+                            }
+                          }}
                         />
                       </InputGroup>
                       <FieldError
@@ -409,6 +453,19 @@ export function PlaceSearch({
                           placeholder="e.g. 77.2090"
                           aria-invalid={!!form.formState.errors.longitude}
                           {...form.register('longitude')}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData('text')
+                            const parsed = parseCoordPair(text)
+                            if (parsed) {
+                              e.preventDefault()
+                              form.setValue('latitude', String(parsed.lat), {
+                                shouldValidate: true,
+                              })
+                              form.setValue('longitude', String(parsed.lng), {
+                                shouldValidate: true,
+                              })
+                            }
+                          }}
                         />
                       </InputGroup>
                       <FieldError

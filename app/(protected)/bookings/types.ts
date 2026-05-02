@@ -15,7 +15,7 @@ import type {
   WaypointType,
   VehicleChargeType,
 } from './schema'
-import type { BookingVehicleStatus } from '../vehicles/schema'
+import type { BookingVehicleStatus } from '../fleet/vehicles/schema'
 
 export type TCustomerStep = z.infer<typeof customerStepSchema>
 export type TWaypointInput = z.infer<typeof waypointInputSchema>

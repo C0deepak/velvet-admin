@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
-import { FlowStepBar } from '../bookings/booking-badges'
+import { FlowStepBar } from '../../bookings/booking-badges'
 import {
   FuelType,
   InsuranceCoverageType,

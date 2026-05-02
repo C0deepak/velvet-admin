@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import { CarIcon, PlusIcon } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { getCategories } from '../../categories/api'
-import { getVehicles } from '../../vehicles/api'
-import type { TCategory } from '../../categories/types'
-import type { TVehicle } from '../../vehicles/types'
+import { getCategories } from '../categories/api'
+import { getVehicles } from './api'
+import type { TCategory } from '../categories/types'
+import type { TVehicle } from './types'
 import { getApiErrorMessage } from '@/helper/api-error-message'
-import { VehicleAvailableBadge } from '../../vehicles/vehicle-badges'
+import { VehicleAvailableBadge } from './vehicle-badges'
 
 const COLS = ['Vehicle', 'Category', 'Fuel', 'Seats', 'Status']
 

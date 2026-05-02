@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
-import { VehicleFormWizard } from '../../../vehicles/vehicle-form-wizard'
+import { VehicleFormWizard } from '../vehicle-form-wizard'
 
 export default function NewVehiclePage() {
   const router = useRouter()
