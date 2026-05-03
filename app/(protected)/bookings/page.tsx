@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CalendarCheckIcon, PlusIcon } from '@phosphor-icons/react'
+import { ArrowsClockwiseIcon, CalendarCheckIcon, PlusIcon } from '@phosphor-icons/react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/pagination'
 import { cn } from '@/lib/utils'
 import { BookingProvider, useBooking, PAGE_SIZE } from './context/booking-provider'
-import { BookingStatusBadge, TripTypeBadge } from './booking-badges'
+import { BookingStatusBadge, PaymentStatusBadge, TripTypeBadge } from './booking-badges'
 import { BookingStatus, WaypointType } from './schema'
 import type { TBooking } from './types'
 
@@ -17,11 +17,12 @@ const FILTER_TABS = [
   { label: 'Pending', value: BookingStatus.PENDING },
   { label: 'Requested', value: BookingStatus.REQUESTED },
   { label: 'Confirmed', value: BookingStatus.CONFIRMED },
+  { label: 'In progress', value: BookingStatus.IN_PROGRESS },
   { label: 'Completed', value: BookingStatus.COMPLETED },
   { label: 'Cancelled', value: BookingStatus.CANCELLED_BY_ADMIN },
 ]
 
-const COLUMNS = ['Reference', 'Customer', 'Trip', 'Route', 'Date', 'Status']
+const COLUMNS = ['Reference', 'Customer', 'Trip', 'Route', 'Date', 'Status', 'Payment']
 
 function BookingRow({ booking }: { booking: TBooking }) {
   const router = useRouter()
@@ -62,16 +63,28 @@ function BookingRow({ booking }: { booking: TBooking }) {
           <p className="text-xs text-muted-foreground">{booking.pickupTime.slice(0, 5)}</p>
         )}
       </td>
-      <td className="py-3">
+      <td className="py-3 pr-6">
         <BookingStatusBadge status={booking.status} />
+      </td>
+      <td className="py-3">
+        <PaymentStatusBadge status={booking.paymentStatus} />
       </td>
     </tr>
   )
 }
 
 function BookingsContent() {
-  const { bookings, isLoading, activeStatus, setStatus, page, totalPages, total, setPage } =
-    useBooking()
+  const {
+    bookings,
+    isLoading,
+    activeStatus,
+    setStatus,
+    page,
+    totalPages,
+    total,
+    setPage,
+    fetchBookings,
+  } = useBooking()
 
   return (
     <div className="flex flex-col gap-6">
@@ -88,21 +101,40 @@ function BookingsContent() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {FILTER_TABS.map(({ label, value }) => (
-          <button
-            key={value}
-            onClick={() => setStatus(value)}
-            className={cn(
-              'border px-2 py-1 text-xs font-medium transition-colors',
-              activeStatus === value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {FILTER_TABS.map(({ label, value }) => (
+            <button
+              key={value}
+              onClick={() => setStatus(value)}
+              type="button"
+              className={cn(
+                'border px-2 py-1 text-xs font-medium transition-colors',
+                activeStatus === value
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="gap-1.5 shrink-0"
+          disabled={isLoading}
+          onClick={() => void fetchBookings(activeStatus, page)}
+          aria-busy={isLoading}
+        >
+          <ArrowsClockwiseIcon
+            className={cn('size-4', isLoading && 'motion-safe:animate-spin')}
+            weight="bold"
+            aria-hidden
+          />
+          Refresh
+        </Button>
       </div>
 
       <Card>

@@ -7,11 +7,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import {
   AirplaneLandingIcon,
   AirplaneTakeoffIcon,
+  AirplaneTiltIcon,
   CaretDownIcon,
   CheckCircleIcon,
+  ClockCountdownIcon,
   MapPinIcon,
   PhoneIcon,
   PlusIcon,
+  RoadHorizonIcon,
   TrashIcon,
   UserCircleIcon,
 } from '@phosphor-icons/react'
@@ -100,12 +103,12 @@ function WaypointRow({
     pinColor
   ]
   return (
-    <div className="flex gap-3">
+    <div className="flex min-w-0 gap-3">
       <div className="flex flex-col items-center pt-2.5">
         <MapPinIcon className={cn('size-4 shrink-0', colorClass)} weight="fill" />
         {showLine && <div className="mt-1 w-px flex-1 bg-border" />}
       </div>
-      <div className={cn('flex-1', showLine ? 'pb-5' : 'pb-1')}>
+      <div className={cn('min-w-0 flex-1', showLine ? 'pb-5' : 'pb-1')}>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
@@ -169,8 +172,8 @@ export function BookingForm() {
     tripType: TripType.ONE_WAY,
     rideDate: '',
     pickupTime: '',
-    error: null as string | null,
   })
+  const [attemptedStep2Submit, setAttemptedStep2Submit] = useState(false)
   const [oneWay, setOneWay] = useState({
     pickup: EMPTY_PLACE,
     stops: [] as PlaceValue[],
@@ -306,11 +309,8 @@ export function BookingForm() {
 
   async function handleCreateBooking() {
     if (!cust.data) return
-    if (!sched.rideDate || !sched.pickupTime) {
-      setSched((s) => ({ ...s, error: 'Ride date and pickup time are required' }))
-      return
-    }
-    setSched((s) => ({ ...s, error: null }))
+    setAttemptedStep2Submit(true)
+    if (!canProceed()) return
     setBookingReq({ loading: true, error: null })
     const { countryCode, phone } = step1Form.getValues()
     try {
@@ -384,7 +384,7 @@ export function BookingForm() {
   const sr = srForm.watch()
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 max-w-4xl">
       <FlowStepBar step={step} labels={['Customer', 'Booking', 'Done']} />
 
       {step === 1 && (
@@ -510,7 +510,14 @@ export function BookingForm() {
               )}
 
               <div className="flex justify-end">
-                <Button type="button" disabled={!cust.data} onClick={() => setStep(2)}>
+                <Button
+                  type="button"
+                  disabled={!cust.data}
+                  onClick={() => {
+                    setAttemptedStep2Submit(false)
+                    setStep(2)
+                  }}
+                >
                   Next →
                 </Button>
               </div>
@@ -525,30 +532,56 @@ export function BookingForm() {
             <CardContent>
               <SectionTitle>Schedule</SectionTitle>
               <div className="flex flex-col gap-6">
-                <div className="flex w-full border border-border">
-                  {[
-                    { value: TripType.ONE_WAY, label: 'One Way' },
-                    { value: TripType.AIRPORT_TRANSFER, label: 'Airport Transfer' },
-                    { value: TripType.HOURLY_RENTALS, label: 'Hourly Rentals' },
-                  ].map(({ value, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setSched((s) => ({ ...s, tripType: value }))}
-                      className={cn(
-                        'flex-1 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors',
-                        sched.tripType === value
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                <div>
+                  <p className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Trip type
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {(
+                      [
+                        {
+                          value: TripType.ONE_WAY,
+                          label: 'One way',
+                          Icon: RoadHorizonIcon,
+                        },
+                        {
+                          value: TripType.AIRPORT_TRANSFER,
+                          label: 'Airport',
+                          Icon: AirplaneTiltIcon,
+                        },
+                        {
+                          value: TripType.HOURLY_RENTALS,
+                          label: 'Hourly',
+                          Icon: ClockCountdownIcon,
+                        },
+                      ] as const
+                    ).map(({ value, label, Icon }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setAttemptedStep2Submit(false)
+                          setSched((s) => ({ ...s, tripType: value }))
+                        }}
+                        className={cn(
+                          'flex min-h-12 items-center gap-3 border px-6 py-3.5 text-sm font-semibold uppercase tracking-wider transition-colors sm:min-w-[9rem] sm:px-7 sm:py-4',
+                          sched.tripType === value
+                            ? 'border-primary bg-primary/10 text-primary shadow-sm shadow-primary/5'
+                            : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                        )}
+                      >
+                        <Icon className="size-5 shrink-0" weight="bold" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
-                  <Field className="flex flex-col gap-1.5">
+                  <Field
+                    data-invalid={attemptedStep2Submit && !sched.rideDate}
+                    className="flex flex-col gap-1.5"
+                  >
                     <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                       Ride Date
                     </FieldLabel>
@@ -556,11 +589,14 @@ export function BookingForm() {
                       <DatePicker
                         value={sched.rideDate}
                         onChange={(v) => setSched((s) => ({ ...s, rideDate: v }))}
-                        error={!!sched.error && !sched.rideDate}
+                        error={attemptedStep2Submit && !sched.rideDate}
                       />
                     </FieldContent>
                   </Field>
-                  <Field className="flex flex-col gap-1.5">
+                  <Field
+                    data-invalid={attemptedStep2Submit && !sched.pickupTime}
+                    className="flex flex-col gap-1.5"
+                  >
                     <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                       Pickup Time
                     </FieldLabel>
@@ -568,13 +604,11 @@ export function BookingForm() {
                       <TimePicker
                         value={sched.pickupTime}
                         onChange={(v) => setSched((s) => ({ ...s, pickupTime: v }))}
-                        error={!!sched.error && !sched.pickupTime}
+                        error={attemptedStep2Submit && !sched.pickupTime}
                       />
                     </FieldContent>
                   </Field>
                 </div>
-
-                {sched.error && <p className="text-sm text-destructive">{sched.error}</p>}
               </div>
             </CardContent>
           </Card>
@@ -590,13 +624,14 @@ export function BookingForm() {
                     value={oneWay.pickup}
                     onChange={(v) => setOneWay((s) => ({ ...s, pickup: v }))}
                     placeholder="Search pickup address…"
+                    error={attemptedStep2Submit && !isPlaceReadyForSubmit(oneWay.pickup)}
                   />
                 </WaypointRow>
 
                 {oneWay.stops.map((stop, i) => (
                   <WaypointRow key={i} label={`Stop ${i + 1}`} pinColor="amber" showLine>
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="min-w-0 flex-1">
                         <PlaceSearch
                           preferConfirmScreen
                           value={stop}
@@ -607,6 +642,7 @@ export function BookingForm() {
                             }))
                           }
                           placeholder={`Stop ${i + 1} address…`}
+                          error={attemptedStep2Submit && !isPlaceReadyForSubmit(stop)}
                         />
                       </div>
                       <button
@@ -645,6 +681,7 @@ export function BookingForm() {
                     value={oneWay.drop}
                     onChange={(v) => setOneWay((s) => ({ ...s, drop: v }))}
                     placeholder="Search drop address…"
+                    error={attemptedStep2Submit && !isPlaceReadyForSubmit(oneWay.drop)}
                   />
                 </WaypointRow>
               </CardContent>
@@ -664,7 +701,10 @@ export function BookingForm() {
                     <button
                       key={value}
                       type="button"
-                      onClick={() => setApt((s) => ({ ...s, flightType: value }))}
+                      onClick={() => {
+                        setAttemptedStep2Submit(false)
+                        setApt((s) => ({ ...s, flightType: value }))
+                      }}
                       className={cn(
                         'flex items-center gap-2 border px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors',
                         apt.flightType === value
@@ -691,8 +731,8 @@ export function BookingForm() {
                     </WaypointRow>
                     {apt.stops.map((stop, i) => (
                       <WaypointRow key={i} label={`Stop ${i + 1}`} pinColor="amber" showLine>
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <div className="min-w-0 flex-1">
                             <PlaceSearch
                               preferConfirmScreen
                               value={stop}
@@ -703,6 +743,7 @@ export function BookingForm() {
                                 }))
                               }
                               placeholder={`Stop ${i + 1} address…`}
+                              error={attemptedStep2Submit && !isPlaceReadyForSubmit(stop)}
                             />
                           </div>
                           <button
@@ -744,6 +785,7 @@ export function BookingForm() {
                         value={apt.customer}
                         onChange={(v) => setApt((s) => ({ ...s, customer: v }))}
                         placeholder="Customer drop address…"
+                        error={attemptedStep2Submit && !isPlaceReadyForSubmit(apt.customer)}
                       />
                     </WaypointRow>
                   </>
@@ -755,12 +797,13 @@ export function BookingForm() {
                         value={apt.customer}
                         onChange={(v) => setApt((s) => ({ ...s, customer: v }))}
                         placeholder="Customer pickup address…"
+                        error={attemptedStep2Submit && !isPlaceReadyForSubmit(apt.customer)}
                       />
                     </WaypointRow>
                     {apt.stops.map((stop, i) => (
                       <WaypointRow key={i} label={`Stop ${i + 1}`} pinColor="amber" showLine>
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <div className="min-w-0 flex-1">
                             <PlaceSearch
                               preferConfirmScreen
                               value={stop}
@@ -771,6 +814,7 @@ export function BookingForm() {
                                 }))
                               }
                               placeholder={`Stop ${i + 1} address…`}
+                              error={attemptedStep2Submit && !isPlaceReadyForSubmit(stop)}
                             />
                           </div>
                           <button
@@ -847,7 +891,15 @@ export function BookingForm() {
                   {hourly.packages.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Loading packages…</p>
                   ) : (
-                    <div className="flex flex-col gap-4">
+                    <div
+                      className={cn(
+                        'flex flex-col gap-4 rounded-none p-0.5',
+                        attemptedStep2Submit &&
+                          sched.tripType === TripType.HOURLY_RENTALS &&
+                          hourly.packageId === null &&
+                          'ring-2 ring-destructive ring-offset-2 ring-offset-background'
+                      )}
+                    >
                       <div className="grid grid-cols-4 gap-3">
                         {hourly.packages.map((pkg) => (
                           <button
@@ -914,6 +966,7 @@ export function BookingForm() {
                       value={hourly.pickup}
                       onChange={(v) => setHourly((s) => ({ ...s, pickup: v }))}
                       placeholder="Starting location…"
+                      error={attemptedStep2Submit && !isPlaceReadyForSubmit(hourly.pickup)}
                     />
                   </WaypointRow>
                 </CardContent>
@@ -931,7 +984,10 @@ export function BookingForm() {
             </div>
             <button
               type="button"
-              onClick={() => setStep(1)}
+              onClick={() => {
+                setAttemptedStep2Submit(false)
+                setStep(1)
+              }}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
               Change
@@ -939,16 +995,24 @@ export function BookingForm() {
           </div>
 
           {bookingReq.error && <p className="text-sm text-destructive">{bookingReq.error}</p>}
+          {attemptedStep2Submit && !canProceed() && (
+            <p className="text-sm text-destructive">
+              Please fill in the highlighted fields before creating the booking.
+            </p>
+          )}
 
           <div className="flex justify-between">
-            <Button type="button" variant="outline" onClick={() => setStep(1)}>
-              ← Back
-            </Button>
             <Button
               type="button"
-              disabled={!canProceed() || bookingReq.loading}
-              onClick={handleCreateBooking}
+              variant="outline"
+              onClick={() => {
+                setAttemptedStep2Submit(false)
+                setStep(1)
+              }}
             >
+              ← Back
+            </Button>
+            <Button type="button" disabled={bookingReq.loading} onClick={handleCreateBooking}>
               {bookingReq.loading ? 'Creating…' : 'Create Booking →'}
             </Button>
           </div>
@@ -1017,7 +1081,6 @@ export function BookingForm() {
                             <SelectValue placeholder="Select category…" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Select category…</SelectItem>
                             {resources.vehicleCategories.map((c) => (
                               <SelectItem key={c.id} value={c.id.toString()}>
                                 {c.categoryName}

@@ -15,6 +15,7 @@ export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
   [BookingStatus.PENDING]: 'Pending',
   [BookingStatus.REQUESTED]: 'Requested',
   [BookingStatus.CONFIRMED]: 'Confirmed',
+  [BookingStatus.IN_PROGRESS]: 'In progress',
   [BookingStatus.COMPLETED]: 'Completed',
   [BookingStatus.CANCELLED_BY_ADMIN]: 'Cancelled',
 }
@@ -25,7 +26,9 @@ export const BOOKING_STATUS_BADGE_CLASSES: Record<BookingStatus, string> = {
   [BookingStatus.REQUESTED]:
     'px-2 py-1 bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20 border',
   [BookingStatus.CONFIRMED]:
-    'border px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+    'px-2 py-1 border border-blue-600/35 bg-blue-500/15 text-blue-950 dark:border-blue-400/40 dark:bg-blue-500/12 dark:text-blue-100',
+  [BookingStatus.IN_PROGRESS]:
+    'px-2 py-1 border border-indigo-600/35 bg-indigo-500/15 text-indigo-950 dark:border-indigo-400/40 dark:bg-indigo-500/12 dark:text-indigo-100',
   [BookingStatus.COMPLETED]:
     'px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 border',
   [BookingStatus.CANCELLED_BY_ADMIN]:
@@ -36,6 +39,29 @@ export function BookingStatusBadge({ status }: { status: BookingStatus }) {
   return (
     <Badge variant="outline" className={BOOKING_STATUS_BADGE_CLASSES[status]} asChild={false}>
       {BOOKING_STATUS_LABEL[status]}
+    </Badge>
+  )
+}
+
+export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  [PaymentStatus.PAID]: 'Paid',
+  [PaymentStatus.PENDING]: 'Unpaid',
+  [PaymentStatus.PARTIAL]: 'Partial',
+}
+
+export const PAYMENT_STATUS_BADGE_CLASSES: Record<PaymentStatus, string> = {
+  [PaymentStatus.PAID]:
+    'px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 border',
+  [PaymentStatus.PENDING]:
+    'px-2 py-1 bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 border',
+  [PaymentStatus.PARTIAL]:
+    'px-2 py-1 bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/25 border',
+}
+
+export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
+  return (
+    <Badge variant="outline" className={PAYMENT_STATUS_BADGE_CLASSES[status]} asChild={false}>
+      {PAYMENT_STATUS_LABEL[status]}
     </Badge>
   )
 }
@@ -64,16 +90,7 @@ export function TripTypeBadge({ tripType }: { tripType: TripType }) {
 }
 
 function paymentLabel(status: PaymentStatus): string {
-  switch (status) {
-    case PaymentStatus.PAID:
-      return 'Paid'
-    case PaymentStatus.PENDING:
-      return 'Unpaid'
-    case PaymentStatus.PARTIAL:
-      return 'Partial'
-    default:
-      return status
-  }
+  return PAYMENT_STATUS_LABEL[status] ?? String(status)
 }
 
 function PaymentDot({ status }: { status: PaymentStatus }) {
@@ -108,6 +125,8 @@ function triggerClass(status: PaymentStatus): string {
 type PaymentStatusDropdownProps = {
   status: PaymentStatus
   updating?: boolean
+  /** When true, the control is non-interactive (e.g. cancelled booking). */
+  readOnly?: boolean
   onPaid: () => void
   onUnpaid: () => void
 }
@@ -115,12 +134,13 @@ type PaymentStatusDropdownProps = {
 export function PaymentStatusDropdown({
   status,
   updating,
+  readOnly = false,
   onPaid,
   onUnpaid,
 }: PaymentStatusDropdownProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={updating}>
+      <DropdownMenuTrigger asChild disabled={updating || readOnly}>
         <button
           type="button"
           tabIndex={0}

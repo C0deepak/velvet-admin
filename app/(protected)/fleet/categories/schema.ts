@@ -12,17 +12,17 @@ export const numOrNull = z.preprocess(
 )
 
 export const waitingTimeConfigSchema = z.object({
-  freeMinutes: z.coerce.number().min(0),
-  chargeableIntervalMinutes: z.coerce.number().min(1),
-  chargePerInterval: z.coerce.number().min(0),
+  freeMinutes: z.coerce.number().min(0, 'Must be 0 or more'),
+  chargeableIntervalMinutes: z.coerce.number().min(1, 'Must be at least 1 minute'),
+  chargePerInterval: z.coerce.number().min(0, 'Must be 0 or more'),
 })
 
 export const hourlyPackageMetadataSchema = z.object({
-  additionalFreeKms: z.coerce.number().min(0),
-  additionalChargePerKm: z.coerce.number().min(0),
-  additionalFreeMinutes: z.coerce.number().min(0),
-  additionalChargePerInterval: z.coerce.number().min(0),
-  additionalChargeableIntervalMinutes: z.coerce.number().min(1),
+  additionalFreeKms: z.coerce.number().min(0, 'Must be 0 or more'),
+  additionalChargePerKm: z.coerce.number().min(0, 'Must be 0 or more'),
+  additionalFreeMinutes: z.coerce.number().min(0, 'Must be 0 or more'),
+  additionalChargePerInterval: z.coerce.number().min(0, 'Must be 0 or more'),
+  additionalChargeableIntervalMinutes: z.coerce.number().min(1, 'Must be at least 1 minute'),
 })
 
 export const categoryMetadataSchema = z.object({
@@ -140,7 +140,7 @@ export const categoryBasicsTabSchema = z
   .object({
     categoryName: z.string().min(1, 'Category name is required'),
     basePrice: z.coerce.number().min(0, 'Base price must be 0 or more'),
-    active: z.coerce.number().min(0).max(1),
+    active: z.coerce.number().min(0, 'Status is required').max(1, 'Invalid status'),
     imageUrl: z.union([z.string().url(), z.literal(''), z.null()]).optional(),
     metadata: z.object({
       waitingTimeConfig: waitingTimeFormSchema,
@@ -172,7 +172,7 @@ export const categoryEntitySchema = z.object({
 export const categoryAdminFormSchema = z.object({
   categoryName: z.string().min(1, 'Category name is required'),
   basePrice: z.coerce.number().min(0, 'Base price must be 0 or more'),
-  active: z.coerce.number().min(0).max(1),
+  active: z.coerce.number().min(0, 'Status is required').max(1, 'Invalid status'),
   imageUrl: z.union([z.string().url(), z.literal(''), z.null()]).optional(),
   metadata: categoryMetadataFormSchema,
 })

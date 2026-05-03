@@ -226,38 +226,45 @@ export function PlaceSearch({
     dismissDialog()
   }
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={openDialog}
+  const triggerButton = (
+    <button
+      type="button"
+      onClick={openDialog}
+      className={cn(
+        'flex w-full min-w-0 items-start gap-2 border-b py-2 text-left text-sm transition-colors',
+        error && !isPlaceReadyForSubmit(value)
+          ? 'border-b-destructive'
+          : isConfirmed
+            ? 'border-b-ring/40 hover:border-b-ring/60'
+            : 'border-b-input hover:border-b-ring/50'
+      )}
+    >
+      <MapPinIcon
         className={cn(
-          'flex h-10 w-full items-center gap-2 border-b text-left text-sm transition-colors',
-          error && !isConfirmed
-            ? 'border-b-destructive'
-            : isConfirmed
-              ? 'border-b-ring/40 hover:border-b-ring/60'
-              : 'border-b-input hover:border-b-ring/50'
+          'mt-0.5 size-3.5 shrink-0',
+          isConfirmed ? 'text-primary' : 'text-muted-foreground'
+        )}
+        weight={isConfirmed ? 'fill' : 'regular'}
+      />
+      <div
+        className={cn(
+          'min-w-0 flex-1',
+          isConfirmed ? 'line-clamp-4 break-words leading-snug' : 'text-muted-foreground'
         )}
       >
-        <MapPinIcon
-          className={cn(
-            'size-3.5 shrink-0',
-            isConfirmed ? 'text-primary' : error ? 'text-destructive' : 'text-muted-foreground'
-          )}
-          weight={isConfirmed ? 'fill' : 'regular'}
-        />
-        <span className={cn('flex-1 truncate', !isConfirmed && 'text-muted-foreground')}>
-          {isConfirmed ? value.address : (placeholder ?? 'Search address…')}
-        </span>
+        {isConfirmed ? value.address : (placeholder ?? 'Search address…')}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
         {preferConfirmScreen && isConfirmed && placeHasCoords(value) && (
-          <span className="tabular-nums text-[10px] text-muted-foreground">
+          <span className="max-w-[11rem] whitespace-normal break-all text-right text-[10px] leading-tight text-muted-foreground tabular-nums sm:max-w-none sm:whitespace-nowrap">
             {value.latitude!.toFixed(4)}, {value.longitude!.toFixed(4)}
           </span>
         )}
         {isConfirmed && (
           <span
             role="button"
+            tabIndex={0}
+            aria-label="Clear place"
             onClick={(e) => {
               e.stopPropagation()
               onChange(EMPTY_PLACE)
@@ -267,24 +274,33 @@ export function PlaceSearch({
             <XIcon className="size-3.5" />
           </span>
         )}
-      </button>
+      </div>
+    </button>
+  )
+
+  return (
+    <>
+      {triggerButton}
 
       <Dialog open={open} onOpenChange={(isOpen) => !isOpen && dismissDialog()}>
-        <DialogContent className="gap-0 p-0 sm:max-w-xl" showCloseButton={false}>
+        <DialogContent
+          className="flex max-h-[min(85vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
+          showCloseButton={false}
+        >
           {screen === 'search' && (
             <>
-              <DialogHeader className="flex-row items-center justify-between border-b border-border px-6 py-4">
+              <DialogHeader className="shrink-0 flex-row items-center justify-between border-b border-border px-6 py-4">
                 <DialogTitle>Search Place</DialogTitle>
                 <button
                   type="button"
                   onClick={dismissDialog}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
                 >
                   <XIcon className="size-4" />
                 </button>
               </DialogHeader>
 
-              <div className="flex items-center gap-2 border-b border-border px-6 py-3">
+              <div className="flex shrink-0 items-center gap-2 border-b border-border px-6 py-3">
                 <MapPinIcon className="size-3.5 shrink-0 text-muted-foreground" />
                 <input
                   autoFocus
@@ -306,26 +322,28 @@ export function PlaceSearch({
                     }
                   }}
                   placeholder="Type to search places…"
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
                 {searching && (
                   <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
                 )}
               </div>
 
-              <div className="max-h-72 overflow-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                 {suggestions.map((s) => (
                   <button
                     key={s.placeId}
                     type="button"
                     onClick={() => onSelectSuggestion(s)}
-                    className="flex w-full items-start gap-3 px-6 py-3 text-left transition-colors hover:bg-muted/50"
+                    className="flex w-full min-w-0 items-start gap-3 px-6 py-3 text-left transition-colors hover:bg-muted/50"
                   >
                     <MapPinIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{s.mainText}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-sm font-medium leading-snug">{s.mainText}</p>
                       {s.secondaryText && (
-                        <p className="truncate text-xs text-muted-foreground">{s.secondaryText}</p>
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+                          {s.secondaryText}
+                        </p>
                       )}
                     </div>
                   </button>
@@ -343,10 +361,15 @@ export function PlaceSearch({
 
           {screen === 'confirm' && (
             <>
-              <DialogHeader className="flex-row items-start justify-between gap-3 border-b border-border px-6 py-4">
-                <div className="min-w-0">
+              <DialogHeader className="shrink-0 flex-row items-start justify-between gap-3 border-b border-border px-6 py-4">
+                <div className="min-w-0 flex-1 pr-2">
                   <DialogTitle>Confirm Place</DialogTitle>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">{suggestionLabel}</p>
+                  <p
+                    className="mt-1 line-clamp-3 text-xs leading-snug text-muted-foreground"
+                    title={suggestionLabel}
+                  >
+                    {suggestionLabel}
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -357,6 +380,7 @@ export function PlaceSearch({
                   }}
                   size={'sm'}
                   variant={'ghost'}
+                  className="shrink-0"
                 >
                   <PencilIcon className="size-4" weight="bold" />
                 </Button>
@@ -367,7 +391,7 @@ export function PlaceSearch({
                   e.preventDefault()
                   void form.handleSubmit(onConfirm)(e)
                 }}
-                className="flex flex-col gap-5 p-6"
+                className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-6"
               >
                 <Field
                   data-invalid={!!form.formState.errors.address}
@@ -377,13 +401,14 @@ export function PlaceSearch({
                     Full Address
                   </FieldLabel>
                   <FieldContent>
-                    <InputGroup className="w-full">
+                    <InputGroup className="w-full min-w-0">
                       <InputGroupAddon align="inline-start">
                         <MapPinIcon className="size-4" weight="bold" />
                       </InputGroupAddon>
                       <InputGroupInput
                         placeholder="Full address"
                         aria-invalid={!!form.formState.errors.address}
+                        className="min-w-0 overflow-x-auto"
                         {...form.register('address')}
                       />
                     </InputGroup>
@@ -397,7 +422,7 @@ export function PlaceSearch({
                   </FieldContent>
                 </Field>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid min-w-0 grid-cols-2 gap-4">
                   <Field
                     data-invalid={!!form.formState.errors.latitude}
                     className="flex flex-col gap-1.5"

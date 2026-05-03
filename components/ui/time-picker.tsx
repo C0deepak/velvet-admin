@@ -46,12 +46,7 @@ export function TimePicker({
                 : 'border-b-input hover:border-b-ring/50'
           )}
         >
-          <ClockIcon
-            className={cn(
-              'size-3.5 shrink-0',
-              error && !value ? 'text-destructive' : 'text-muted-foreground'
-            )}
-          />
+          <ClockIcon className="size-3.5 shrink-0 text-muted-foreground" />
           <span className={cn('flex-1', !value && 'text-muted-foreground')}>
             {value
               ? `${String(selectedHour).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`

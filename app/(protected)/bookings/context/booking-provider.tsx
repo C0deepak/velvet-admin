@@ -53,7 +53,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await getBookings({
         status: status && status !== 'ALL' ? status : undefined,
-        page,
+        pageNo: page,
         pageSize: PAGE_SIZE,
       })
       setState((s) => ({

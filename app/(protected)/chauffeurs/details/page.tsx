@@ -4,6 +4,15 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeftIcon, ProhibitIcon } from '@phosphor-icons/react'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { getChauffeurById, toggleBlockChauffeur } from '../api'
@@ -22,6 +31,7 @@ function ChauffeurDetailBody() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [blockBusy, setBlockBusy] = useState(false)
+  const [blockAlertOpen, setBlockAlertOpen] = useState(false)
 
   const reload = useCallback((): Promise<void> => {
     if (!Number.isFinite(id)) {
@@ -74,12 +84,13 @@ function ChauffeurDetailBody() {
     }
   }, [id])
 
-  async function onToggleBlock() {
+  async function executeToggleBlock() {
     if (!Number.isFinite(id)) return
     setBlockBusy(true)
     try {
       await toggleBlockChauffeur(id)
       await reload()
+      setBlockAlertOpen(false)
     } catch (e) {
       setErr(getApiErrorMessage(e))
     } finally {
@@ -136,11 +147,11 @@ function ChauffeurDetailBody() {
             </Link>
           </Button>
           <Button
-            variant="destructive"
+            variant={chauffeur.blocked ? 'outline' : 'destructive'}
             size="sm"
             className="gap-1.5"
             disabled={blockBusy}
-            onClick={() => void onToggleBlock()}
+            onClick={() => setBlockAlertOpen(true)}
           >
             <ProhibitIcon className="size-4" weight="bold" />
             {chauffeur.blocked ? 'Unblock' : 'Block'}
@@ -178,6 +189,44 @@ function ChauffeurDetailBody() {
       </div>
 
       <ChauffeurFormWizard mode="edit" chauffeurId={id} onSaved={onSaved} />
+
+      <AlertDialog
+        open={blockAlertOpen}
+        onOpenChange={(open) => {
+          if (!open && blockBusy) return
+          setBlockAlertOpen(open)
+        }}
+      >
+        <AlertDialogContent onEscapeKeyDown={(e) => blockBusy && e.preventDefault()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {chauffeur.blocked ? 'Unblock this chauffeur?' : 'Block this chauffeur?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {chauffeur.blocked
+                ? 'They will be able to take assignments again. Continue only if you intend to restore access.'
+                : 'They will not receive new rides while blocked. You can unblock later from this page.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={blockBusy}>Go back</AlertDialogCancel>
+            <Button
+              type="button"
+              variant={chauffeur.blocked ? 'default' : 'destructive'}
+              disabled={blockBusy}
+              onClick={() => void executeToggleBlock()}
+            >
+              {blockBusy
+                ? chauffeur.blocked
+                  ? 'Unblocking…'
+                  : 'Blocking…'
+                : chauffeur.blocked
+                  ? 'Yes, unblock'
+                  : 'Yes, block'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CustomerType, customerStepSchema } from '../bookings/schema'
+import { CustomerType, customerStepSchema, tenDigitNationalPhoneSchema } from '../bookings/schema'
 
 export const customerBriefSchema = z.object({
   id: z.number(),
@@ -12,7 +12,7 @@ export const customerBriefSchema = z.object({
 
 export const customerMetadataSchema = z.object({
   numberOfRides: z.number(),
-  customerType: z.enum(CustomerType),
+  customerType: z.enum(CustomerType, { error: 'Customer type is invalid' }),
 })
 
 export const customerEntitySchema = z.object({
@@ -38,12 +38,14 @@ export const customersPaginatedResponseSchema = z.object({
   data: z.array(customerEntitySchema),
 })
 
+export const CUSTOMER_FORM_GENDER = ['MALE', 'FEMALE'] as const
+
 export const customerCreateBodySchema = z.object({
-  countryCode: z.string().min(1),
-  phone: z.string().min(1),
-  name: z.string().min(1),
-  email: z.union([z.string().email(), z.literal('')]).optional(),
-  gender: z.string().optional(),
+  countryCode: z.string().trim().min(1, 'Enter a country code'),
+  phone: tenDigitNationalPhoneSchema,
+  name: z.string().trim().min(1, 'Enter the customer’s name'),
+  email: z.union([z.email('Enter a valid email address'), z.literal('')]).optional(),
+  gender: z.enum(CUSTOMER_FORM_GENDER, { error: 'Please select a gender' }),
 })
 
 export const customerUpdateBodySchema = customerCreateBodySchema

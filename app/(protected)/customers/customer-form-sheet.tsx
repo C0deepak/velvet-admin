@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, type DefaultValues } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Field, FieldContent, FieldError, FieldLabel } from '@/components/ui/field'
@@ -27,12 +27,11 @@ function fieldErr(
   return m ? [{ message: String(m) }] : undefined
 }
 
-const defaultValues: CustomerCreateBody = {
+const defaultValues: DefaultValues<CustomerCreateBody> = {
   countryCode: '91',
   phone: '',
   name: '',
   email: '',
-  gender: '',
 }
 
 type CustomerFormSheetProps = {
@@ -85,7 +84,7 @@ export function CustomerFormSheet({
             phone: national,
             name: data.name ?? '',
             email: data.email ?? '',
-            gender: data.gender ?? '',
+            ...(data.gender === 'MALE' || data.gender === 'FEMALE' ? { gender: data.gender } : {}),
           })
           form.clearErrors()
         })
@@ -110,7 +109,6 @@ export function CustomerFormSheet({
         const { data } = await createCustomer({
           ...values,
           email: values.email?.trim() || undefined,
-          gender: values.gender?.trim() || undefined,
         })
         onSaved?.(data)
         onOpenChange(false)
@@ -119,7 +117,6 @@ export function CustomerFormSheet({
       const { data } = await updateCustomer(customerId, {
         ...values,
         email: values.email?.trim() || undefined,
-        gender: values.gender?.trim() || undefined,
       })
       onSaved?.(data)
       onOpenChange(false)
@@ -186,7 +183,7 @@ export function CustomerFormSheet({
           </Field>
           <Field className="flex flex-col gap-1.5">
             <FieldLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Gender <span className="font-normal normal-case">(optional)</span>
+              Gender
             </FieldLabel>
             <FieldContent>
               <Controller
@@ -194,14 +191,15 @@ export function CustomerFormSheet({
                 name="gender"
                 render={({ field }) => (
                   <Select
-                    value={field.value?.trim() ? field.value : '__none__'}
-                    onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
+                    value={
+                      field.value === 'MALE' || field.value === 'FEMALE' ? field.value : undefined
+                    }
+                    onValueChange={field.onChange}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select…" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
                       <SelectItem value="MALE">Male</SelectItem>
                       <SelectItem value="FEMALE">Female</SelectItem>
                     </SelectContent>

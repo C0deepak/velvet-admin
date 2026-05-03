@@ -5,6 +5,7 @@ import { useForm, Controller, type FieldPath } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Field, FieldContent, FieldError, FieldLabel } from '@/components/ui/field'
 import { InputGroup, InputGroupInput } from '@/components/ui/input-group'
+import { Slider } from '@/components/ui/slider'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { categoryBasicsTabSchema, categoryHourlyTabSchema } from './schema'
@@ -20,6 +21,15 @@ import type {
 import { createCategory, getCategoryById, updateCategory, uploadCategoryImageFile } from './api'
 import { defaultCategoryFormValues, categoryToForm } from './category-defaults'
 import { getApiErrorMessage } from '@/helper/api-error-message'
+
+const FREE_WAIT_SLIDER_MAX = 60
+const FREE_WAIT_SLIDER_STEP = 5
+
+function snapFreeWaitMinutes(n: number): number {
+  const s = FREE_WAIT_SLIDER_STEP
+  const stepped = Math.round(n / s) * s
+  return Math.min(Math.max(stepped, 0), FREE_WAIT_SLIDER_MAX)
+}
 
 type CategoryFormSheetProps = {
   open: boolean
@@ -376,13 +386,55 @@ export function CategoryFormSheet({
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Waiting time charges
               </p>
-              <div className="grid gap-5 sm:grid-cols-3">
-                <NullableNumberField
-                  form={form}
-                  name="metadata.waitingTimeConfig.freeMinutes"
-                  lbl="Free minutes"
-                  min={0}
-                />
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field className="col-span-full gap-3 sm:col-span-2">
+                  <FieldContent className="gap-3">
+                    <Controller
+                      control={form.control}
+                      name="metadata.waitingTimeConfig.freeMinutes"
+                      render={({ field }) => {
+                        const raw = field.value as number | null | undefined
+                        const clamped =
+                          raw != null && Number.isFinite(raw) ? snapFreeWaitMinutes(raw) : 0
+                        const unset = raw == null || !Number.isFinite(raw)
+                        return (
+                          <>
+                            <div className="flex items-baseline justify-between gap-2">
+                              <FieldLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Free minutes
+                              </FieldLabel>
+                              <span
+                                className={cn(
+                                  'text-sm tabular-nums',
+                                  unset ? 'text-muted-foreground' : 'text-foreground'
+                                )}
+                              >
+                                {unset ? '—' : `${raw} min`}
+                              </span>
+                            </div>
+                            <Slider
+                              className="w-full max-w-none pt-1"
+                              min={0}
+                              max={FREE_WAIT_SLIDER_MAX}
+                              step={FREE_WAIT_SLIDER_STEP}
+                              value={[clamped]}
+                              onValueChange={(next) => {
+                                const v = next[0]
+                                field.onChange(
+                                  typeof v === 'number' && Number.isFinite(v) ? v : null
+                                )
+                              }}
+                              onBlur={field.onBlur}
+                            />
+                          </>
+                        )
+                      }}
+                    />
+                    <FieldError
+                      errors={fieldErrFmt(form, 'metadata.waitingTimeConfig.freeMinutes')}
+                    />
+                  </FieldContent>
+                </Field>
                 <NullableNumberField
                   form={form}
                   name="metadata.waitingTimeConfig.chargeableIntervalMinutes"

@@ -35,7 +35,7 @@ export function updateBooking(
 export function getBookings(params?: {
   status?: string
   customerId?: number
-  page?: number
+  pageNo?: number
   pageSize?: number
 }): Promise<AxiosResponse<TBookingListResponse>> {
   return api.get<TBookingListResponse>('/bookings', { params })

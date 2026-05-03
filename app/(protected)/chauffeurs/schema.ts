@@ -1,4 +1,5 @@
 import z from 'zod'
+import { tenDigitNationalPhoneSchema } from '../bookings/schema'
 
 export enum ChauffeurGender {
   MALE = 'MALE',
@@ -48,15 +49,23 @@ const bankDetailsSchema = z.object({
   accountNumber: req('Account number'),
   ifscCode: req('IFSC code'),
   bankName: req('Bank name'),
-  accountType: z.enum(AccountType),
+  accountType: z.enum(AccountType, { error: 'Please select an account type' }),
 })
 
 const metadataSchema = z.object({
   workingHoursStart: req('Working start time'),
   workingHoursEnd: req('Working end time'),
-  drivingStartYear: z.number().min(1950, 'Enter a valid year (1950 or later)'),
-  luxuryDrivingStartYear: z.number().min(1950, 'Enter a valid year (1950 or later)'),
-  luxuryBrandsDriven: z.string(),
+  drivingStartYear: z
+    .number({
+      error: 'Driving start year is required',
+    })
+    .min(1950, 'Enter a valid year (1950 or later)'),
+  luxuryDrivingStartYear: z
+    .number({
+      error: 'Luxury driving start year is required',
+    })
+    .min(1950, 'Enter a valid year (1950 or later)'),
+  luxuryBrandsDriven: z.string().trim().min(1, 'Luxury brands driven is required'),
   joiningDate: req('Joining date'),
 })
 
@@ -64,16 +73,13 @@ export const chauffeurFormSchema = z.object({
   firstName: req('First name'),
   lastName: req('Last name'),
   email: z.preprocess((v) => (v == null ? '' : v), z.email('Enter a valid email address')),
-  phone: z.preprocess(
-    (v) => (v == null ? '' : v),
-    z.string().min(10, 'Enter a valid 10-digit phone number')
-  ),
+  phone: tenDigitNationalPhoneSchema,
   countryCode: req('Country code'),
   dateOfBirth: req('Date of birth'),
   dlExpiryDate: req('License expiry date'),
-  gender: z.enum(ChauffeurGender),
+  gender: z.enum(ChauffeurGender, { error: 'Please select a gender' }),
   licenseNumber: req('License number'),
-  maritalStatus: z.enum(MaritalStatus),
+  maritalStatus: z.enum(MaritalStatus, { error: 'Please select marital status' }),
   hasCriminalRecord: z.boolean(),
   address: z.object({
     currentAddress: addressSchema,

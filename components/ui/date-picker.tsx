@@ -37,12 +37,7 @@ export function DatePicker({
                 : 'border-b-input hover:border-b-ring/50'
           )}
         >
-          <CalendarIcon
-            className={cn(
-              'size-3.5 shrink-0',
-              error && !value ? 'text-destructive' : 'text-muted-foreground'
-            )}
-          />
+          <CalendarIcon className="size-3.5 shrink-0 text-muted-foreground" />
           <span className={cn('flex-1', !date && 'text-muted-foreground')}>
             {date ? format(date, 'dd MMM yyyy') : placeholder}
           </span>

@@ -105,13 +105,13 @@ export const vehicleWritableSchema = z.object({
   brand: reqField('Brand'),
   model: reqField('Model'),
   seatingCapacity: z.coerce.number().min(1, 'Seating capacity is required'),
-  fuelType: z.enum(FuelType),
-  transmission: z.enum(Transmission),
+  fuelType: z.enum(FuelType, { error: 'Please select a fuel type' }),
+  transmission: z.enum(Transmission, { error: 'Please select transmission type' }),
   registrationDate: reqField('Registration date'),
   modelYear: z.coerce
-    .number()
-    .min(1900)
-    .max(new Date().getFullYear() + 1),
+    .number({ error: 'Model year is required' })
+    .min(1900, 'Enter a valid model year')
+    .max(new Date().getFullYear() + 1, 'Model year is too far in the future'),
   chassisNumber: reqField('Chassis number'),
   engineNumber: reqField('Engine number'),
   colour: reqField('Colour'),
