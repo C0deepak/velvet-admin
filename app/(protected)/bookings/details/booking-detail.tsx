@@ -1521,7 +1521,7 @@ export function BookingDetail() {
                         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           2 · Fare &amp; collections
                         </p>
-                        <div className="mt-3 grid grid-cols-2 gap-5 lg:grid-cols-4">
+                        <div className="mt-3 grid grid-cols-2 gap-5 lg:grid-cols-2">
                           <InfoField
                             label="Base fare"
                             value={`₹${v.baseFare.toLocaleString('en-IN')}`}
