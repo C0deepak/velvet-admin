@@ -14,7 +14,6 @@ import {
   PaperPlaneRightIcon,
   PlusIcon,
   ProhibitIcon,
-  ReceiptIcon,
   TrashIcon,
 } from '@phosphor-icons/react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -46,20 +45,12 @@ import { cn } from '@/lib/utils'
 import { AIRPORTS, findTerminal, type AirportCity } from '@/lib/airport-data'
 import { AirportPicker } from '../components/airport-picker'
 import { PlaceSearch, EMPTY_PLACE, type PlaceValue } from '../new/place-search'
-import {
-  TripType,
-  FlightType,
-  WaypointType,
-  BookingStatus,
-  VehicleChargeType,
-  specialRequestSchema,
-} from '../schema'
+import { TripType, FlightType, WaypointType, BookingStatus, specialRequestSchema } from '../schema'
 import { BookingVehicleStatus } from '../../fleet/vehicles/schema'
 import type {
   TBooking,
   TBookingVehicle,
   TUpdateBooking,
-  TVehicleCharge,
   THourlyPackage,
   TSpecialRequest,
 } from '../types'
@@ -72,8 +63,6 @@ import {
   addOrUpdateBookingVehicle,
   deleteBookingVehicle,
   updateBookingVehicleFare,
-  getBookingVehicleCharges,
-  updateBookingVehicleCharges,
   getBeverages,
   submitBooking,
   confirmBooking,
@@ -87,6 +76,7 @@ import type { TCategory } from '../../fleet/categories/types'
 import type { TVehicle } from '../../fleet/vehicles/types'
 import type { TChauffeur } from '../../chauffeurs/types'
 import { getApiErrorMessage } from '@/helper/api-error-message'
+import { BookingVehicleExtraChargesInline } from './booking-vehicle-extra-charges-inline'
 
 function fleetCategoryChoicesForPickers(all: TCategory[], preferredCategoryId: number | null) {
   const active = all.filter((c) => c.active === 1)
@@ -126,30 +116,63 @@ function InfoField({
   label,
   value,
   snapshot,
+  dense,
 }: {
   label: string
   value: React.ReactNode
   snapshot?: boolean
+  /** Stacked micro-label over value — use inside DetailSnap cells */
+  dense?: boolean
 }) {
+  const filler = value ?? <span className="font-normal text-muted-foreground">—</span>
+
+  if (snapshot && dense) {
+    return (
+      <div className="flex min-w-0 flex-col gap-px">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          {label}
+        </span>
+        <span className="break-words text-[13px] font-medium leading-tight tracking-tight text-foreground">
+          {filler}
+        </span>
+      </div>
+    )
+  }
+
   if (snapshot) {
     return (
       <div className="flex min-w-0 items-start justify-between gap-4 py-2.5">
         <p className="shrink-0 pt-px text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
-        <div className="min-w-0 flex-1 text-right text-sm font-medium leading-snug text-foreground break-words">
-          {value ?? <span className="text-muted-foreground">—</span>}
+        <div className="min-w-0 flex-1 text-right text-sm font-medium leading-snug break-words text-foreground">
+          {filler}
         </div>
       </div>
     )
   }
+
   return (
     <div className="flex flex-col gap-1">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="text-sm">{value ?? <span className="text-muted-foreground">—</span>}</p>
+      <p className="text-sm">{filler}</p>
     </div>
+  )
+}
+
+function DetailSnapGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-none border border-border bg-border">
+      {children}
+    </div>
+  )
+}
+
+function DetailSnapCell({ span2, children }: { span2?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn('min-w-0 bg-background px-2 py-1.5', span2 && 'col-span-2')}>{children}</div>
   )
 }
 
@@ -232,6 +255,37 @@ function WaypointRow({
   )
 }
 
+function InlineQuantityStepper({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <div className="grid w-full grid-cols-3 gap-2">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        disabled={value <= 0}
+        className="flex h-10 w-full items-center justify-center border border-border bg-transparent text-base font-semibold transition-colors hover:bg-muted disabled:opacity-40"
+      >
+        −
+      </button>
+      <span className="flex h-10 w-full items-center justify-center text-sm font-semibold tabular-nums text-foreground">
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        className="flex h-10 w-full items-center justify-center border border-border bg-transparent text-base font-semibold transition-colors hover:bg-muted"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 function CounterRow({
   label,
   value,
@@ -273,17 +327,6 @@ function inferAptRouteFromBooking(b: TBooking): { city: AirportCity; terminalIdx
       ? b.waypoints.find((w) => w.type === WaypointType.PICKUP)
       : [...b.waypoints].reverse().find((w) => w.type === WaypointType.DROP)
   return findTerminal(aptWp?.address ?? '') ?? { city: 'Delhi', terminalIdx: 0 }
-}
-
-type ChargeRow = { key: string; type: VehicleChargeType; amount: number | null }
-
-function mergeChargePayload(rows: ChargeRow[]): TVehicleCharge[] {
-  return rows
-    .filter(
-      (r): r is ChargeRow & { amount: number } =>
-        typeof r.amount === 'number' && Number.isFinite(r.amount)
-    )
-    .map((r) => ({ type: r.type, amount: r.amount }))
 }
 
 function buildSpecialRequestUpdatePayload(
@@ -400,15 +443,6 @@ export function BookingDetail() {
     vehicle: null as TBookingVehicle | null,
     actualFare: '',
     advanceAmount: '',
-    saving: false,
-    error: null as string | null,
-  })
-
-  const [chargesSheet, setChargesSheet] = useState({
-    open: false,
-    vehicleId: null as number | null,
-    chargeRows: [] as ChargeRow[],
-    loading: false,
     saving: false,
     error: null as string | null,
   })
@@ -784,84 +818,6 @@ export function BookingDetail() {
     }
   }
 
-  async function openChargesSheet(vehicleId: number) {
-    setChargesSheet({
-      open: true,
-      vehicleId,
-      chargeRows: [],
-      loading: true,
-      saving: false,
-      error: null,
-    })
-    try {
-      const { data } = await getBookingVehicleCharges(vehicleId)
-      const rows: ChargeRow[] = data.map((c, i) => ({
-        key: `${c.type}_${i}`,
-        type: c.type,
-        amount: c.amount,
-      }))
-      if (rows.length === 0) {
-        rows.push({ key: 'mc_default', type: VehicleChargeType.MC_FARE, amount: null })
-      }
-      setChargesSheet((s) => ({ ...s, chargeRows: rows, loading: false }))
-    } catch {
-      setChargesSheet((s) => ({
-        ...s,
-        chargeRows: [{ key: 'mc_default', type: VehicleChargeType.MC_FARE, amount: null }],
-        loading: false,
-      }))
-    }
-  }
-
-  function updateChargeRow(
-    key: string,
-    patch: Partial<{ type: VehicleChargeType; amount: number | null }>
-  ) {
-    setChargesSheet((s) => ({
-      ...s,
-      chargeRows: s.chargeRows.map((r) => (r.key === key ? { ...r, ...patch } : r)),
-    }))
-  }
-
-  function addChargeRow() {
-    setChargesSheet((s) => ({
-      ...s,
-      chargeRows: [
-        ...s.chargeRows,
-        {
-          key: `new_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-          type: VehicleChargeType.PARKING_CHARGE,
-          amount: null,
-        },
-      ],
-    }))
-  }
-
-  function removeChargeRow(key: string) {
-    setChargesSheet((s) => ({
-      ...s,
-      chargeRows:
-        s.chargeRows.filter((r) => r.key !== key).length > 0
-          ? s.chargeRows.filter((r) => r.key !== key)
-          : [{ key: `fallback_${Date.now()}`, type: VehicleChargeType.MC_FARE, amount: null }],
-    }))
-  }
-
-  async function handleSaveCharges() {
-    if (!chargesSheet.vehicleId || !booking) return
-    setChargesSheet((s) => ({ ...s, saving: true, error: null }))
-    try {
-      await updateBookingVehicleCharges(
-        chargesSheet.vehicleId,
-        mergeChargePayload(chargesSheet.chargeRows)
-      )
-      await fetchAndApplyBooking(booking.id, { reloadVehicles: true })
-      setChargesSheet((s) => ({ ...s, open: false, saving: false }))
-    } catch (err) {
-      setChargesSheet((s) => ({ ...s, saving: false, error: getApiErrorMessage(err) }))
-    }
-  }
-
   async function fetchAndApplyBooking(
     bookingId: number,
     options?: { refreshRoute?: boolean; reloadVehicles?: boolean }
@@ -1084,569 +1040,683 @@ export function BookingDetail() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card>
-          <CardContent>
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <SectionTitle className="mb-0">Booking Details</SectionTitle>
-              <DisableWithTooltip disabled={isCancelledBooking} tooltip={msgCancelledReadonly}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 text-xs"
-                  type="button"
-                  onClick={() => openEdit('basics')}
-                >
-                  <PencilSimpleIcon className="size-3.5" weight="bold" />
-                  Edit
-                </Button>
-              </DisableWithTooltip>
-            </div>
-            <div className="flex flex-col divide-y divide-border border-t border-border">
-              <InfoField snapshot label="Ride date" value={booking.rideDate} />
-              <InfoField snapshot label="Pickup time" value={formatHmTo12h(booking.pickupTime)} />
-              <InfoField snapshot label="Source" value={booking.bookingSource} />
-              <InfoField snapshot label="Customer" value={booking.metadata.customerName} />
-              <InfoField snapshot label="Contact" value={booking.metadata.customerContact} />
-              <InfoField snapshot label="Type" value={booking.metadata.customerType} />
-              <InfoField snapshot label="Remarks" value={booking.metadata.remarks ?? null} />
-              {booking.tripType === TripType.AIRPORT_TRANSFER && (
-                <>
-                  <InfoField snapshot label="Flight type" value={booking.metadata.flightType} />
-                  <InfoField snapshot label="Flight no" value={booking.metadata.flightNo} />
-                </>
-              )}
-              {booking.tripType === TripType.HOURLY_RENTALS && (
-                <InfoField
-                  snapshot
-                  label="Package"
-                  value={
-                    booking.hourlyPackage
-                      ? `${booking.hourlyPackage.hourlyPackageDetails.hours}h / ${booking.hourlyPackage.hourlyPackageDetails.km}km`
-                      : null
-                  }
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent>
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <SectionTitle className="mb-0">Special Request</SectionTitle>
-              <DisableWithTooltip disabled={isCancelledBooking} tooltip={msgCancelledReadonly}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 text-xs"
-                  type="button"
-                  onClick={() => openEdit('special')}
-                >
-                  <PencilSimpleIcon className="size-3.5" weight="bold" />
-                  Edit
-                </Button>
-              </DisableWithTooltip>
-            </div>
-            <div className="flex flex-col divide-y divide-border border-t border-border">
-              <InfoField snapshot label="Vehicle category" value={sr?.vehicleCategory} />
-              <InfoField snapshot label="Vehicle" value={sr?.vehicle} />
-              <InfoField snapshot label="Fleet size" value={String(sr?.numberOfVehicles ?? 0)} />
-              <InfoField
-                snapshot
-                label="Passengers"
-                value={`Adults ${sr?.passengers?.adults ?? 0} · Children ${sr?.passengers?.children ?? 0}`}
-              />
-              <InfoField
-                snapshot
-                label="Luggage"
-                value={`Large ${sr?.luggage?.large ?? 0} · Medium ${sr?.luggage?.medium ?? 0} · Small ${sr?.luggage?.small ?? 0}`}
-              />
-              <InfoField snapshot label="Beverages" value={specialRequestBeveragesLine} />
-              <InfoField snapshot label="Other notes" value={sr?.other} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent>
-            <SectionTitle>Financials</SectionTitle>
-            <div className="flex flex-col divide-y divide-border border-t border-border">
-              <InfoField
-                snapshot
-                label="Estimated fare"
-                value={
-                  booking.estimatedFare != null
-                    ? `₹${booking.estimatedFare.toLocaleString('en-IN')}`
-                    : null
-                }
-              />
-              <InfoField
-                snapshot
-                label="Actual fare"
-                value={
-                  booking.actualFare != null
-                    ? `₹${booking.actualFare.toLocaleString('en-IN')}`
-                    : null
-                }
-              />
-              <InfoField
-                snapshot
-                label="Total fare"
-                value={
-                  booking.totalFare != null ? `₹${booking.totalFare.toLocaleString('en-IN')}` : null
-                }
-              />
-              <InfoField
-                snapshot
-                label="Advance"
-                value={
-                  booking.advanceAmount != null
-                    ? `₹${booking.advanceAmount.toLocaleString('en-IN')}`
-                    : null
-                }
-              />
-              <InfoField
-                snapshot
-                label="Balance"
-                value={
-                  booking.balanceAmount != null
-                    ? `₹${booking.balanceAmount.toLocaleString('en-IN')}`
-                    : null
-                }
-              />
-              <InfoField snapshot label="Payment mode" value={booking.paymentMode} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-2 gap-6">
-        <Card>
-          <CardContent>
-            <SectionTitle>Route</SectionTitle>
-            {isCancelledBooking && (
-              <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-muted-foreground">
-                {msgCancelledReadonly}
-              </p>
-            )}
-            <fieldset
-              disabled={isCancelledBooking}
-              className="m-0 min-w-0 border-0 p-0 disabled:pointer-events-none disabled:opacity-[0.58]"
-            >
-              <div className="mb-6 rounded-md border border-border bg-muted/20 p-4">
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Waypoints
-                </p>
-                <ul className="flex flex-col gap-2">
-                  {route.wps.map((wp, i) => (
-                    <li
-                      key={wp.dbId ?? `wp_${i}_${wp.type}`}
-                      className="flex gap-3 border-l-2 border-l-primary/40 pl-3 text-xs leading-relaxed"
-                    >
-                      <span className="shrink-0 font-bold uppercase tracking-wider text-muted-foreground">
-                        {wp.type.replace(/_/g, ' ')}
-                      </span>
-                      <span className="min-w-0 flex-1 text-foreground">
-                        {wp.place.address || '—'}
-                      </span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {wp.place.latitude != null &&
-                        wp.place.longitude != null &&
-                        Number.isFinite(wp.place.latitude) &&
-                        Number.isFinite(wp.place.longitude)
-                          ? `${wp.place.latitude.toFixed(5)}, ${wp.place.longitude.toFixed(5)}`
-                          : '—'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card>
+            <CardContent>
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <SectionTitle className="mb-0">Booking Details</SectionTitle>
+                <DisableWithTooltip disabled={isCancelledBooking} tooltip={msgCancelledReadonly}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    type="button"
+                    onClick={() => openEdit('basics')}
+                  >
+                    <PencilSimpleIcon className="size-3.5" weight="bold" />
+                    Edit
+                  </Button>
+                </DisableWithTooltip>
               </div>
-
-              {booking.tripType === TripType.ONE_WAY && (
-                <>
-                  {pickupIdx !== -1 && (
-                    <WaypointRow label="Pickup" pinColor="green" showLine>
-                      <PlaceSearch
-                        preferConfirmScreen
-                        value={route.wps[pickupIdx].place}
-                        onChange={(v) => updateWp(pickupIdx, v)}
-                        placeholder="Search pickup…"
-                      />
-                    </WaypointRow>
-                  )}
-                  {route.wps.map((wp, i) =>
-                    wp.type !== WaypointType.STOP ? null : (
-                      <WaypointRow
-                        key={i}
-                        label={`Stop ${stopWps.indexOf(wp) + 1}`}
-                        pinColor="amber"
-                        showLine
-                      >
-                        <div className="flex min-w-0 items-start gap-2">
-                          <div className="min-w-0 flex-1">
-                            <PlaceSearch
-                              preferConfirmScreen
-                              value={wp.place}
-                              onChange={(v) => updateWp(i, v)}
-                              placeholder={`Stop ${stopWps.indexOf(wp) + 1} address…`}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeStop(i)}
-                            className="mt-2.5 shrink-0 text-muted-foreground hover:text-destructive"
-                          >
-                            <TrashIcon className="size-3.5" weight="bold" />
-                          </button>
-                        </div>
-                      </WaypointRow>
-                    )
-                  )}
-                  <div className="flex gap-3">
-                    <div className="flex flex-col items-center pt-2.5">
-                      <div className="size-4" />
-                      <div className="mt-1 w-px flex-1 bg-border" />
-                    </div>
-                    <div className="flex-1 pb-5">
-                      <button
-                        type="button"
-                        onClick={addStop}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <PlusIcon className="size-3" weight="bold" />
-                        Add stop
-                      </button>
-                    </div>
-                  </div>
-                  {dropIdx !== -1 && (
-                    <WaypointRow label="Drop" pinColor="red" showLine={false}>
-                      <PlaceSearch
-                        preferConfirmScreen
-                        value={route.wps[dropIdx].place}
-                        onChange={(v) => updateWp(dropIdx, v)}
-                        placeholder="Search drop…"
-                      />
-                    </WaypointRow>
-                  )}
-                </>
-              )}
-
-              {booking.tripType === TripType.AIRPORT_TRANSFER &&
-                (() => {
-                  const aptIdx =
-                    booking.metadata.flightType === FlightType.ARRIVAL ? pickupIdx : dropIdx
-                  const custIdx =
-                    booking.metadata.flightType === FlightType.ARRIVAL ? dropIdx : pickupIdx
-                  const aptLabel =
-                    booking.metadata.flightType === FlightType.ARRIVAL
-                      ? 'Pickup — Airport'
-                      : 'Drop — Airport'
-                  const custLabel =
-                    booking.metadata.flightType === FlightType.ARRIVAL ? 'Drop' : 'Pickup'
-
-                  return (
-                    <>
-                      <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground">
-                        {booking.metadata.flightType === FlightType.ARRIVAL ? (
-                          <AirplaneLandingIcon className="size-4" />
-                        ) : (
-                          <AirplaneTakeoffIcon className="size-4" />
-                        )}
-                        <span className="font-semibold uppercase tracking-wider">
-                          {booking.metadata.flightType ?? 'Arrival'}
-                        </span>
-                        {booking.metadata.flightNo && (
-                          <span className="ml-1 font-mono">· {booking.metadata.flightNo}</span>
-                        )}
-                      </div>
-
-                      {booking.metadata.flightType === FlightType.ARRIVAL ? (
-                        <>
-                          {aptIdx !== -1 && (
-                            <WaypointRow label={aptLabel} pinColor="green" showLine>
-                              <AirportPicker
-                                city={aptResolved.city}
-                                terminalIdx={aptResolved.terminalIdx}
-                                onAirportChange={(c, ti) => syncAirportFromPicker(c, ti)}
-                              />
-                            </WaypointRow>
-                          )}
-                          {route.wps.map((wp, i) =>
-                            wp.type !== WaypointType.STOP ? null : (
-                              <WaypointRow
-                                key={i}
-                                label={`Stop ${stopWps.indexOf(wp) + 1}`}
-                                pinColor="amber"
-                                showLine
-                              >
-                                <div className="flex min-w-0 items-start gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <PlaceSearch
-                                      preferConfirmScreen
-                                      value={wp.place}
-                                      onChange={(v) => updateWp(i, v)}
-                                      placeholder={`Stop ${stopWps.indexOf(wp) + 1}…`}
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeStop(i)}
-                                    className="mt-2.5 shrink-0 text-muted-foreground hover:text-destructive"
-                                  >
-                                    <TrashIcon className="size-3.5" weight="bold" />
-                                  </button>
-                                </div>
-                              </WaypointRow>
-                            )
-                          )}
-                          <div className="flex gap-3">
-                            <div className="flex flex-col items-center pt-2.5">
-                              <div className="size-4" />
-                              <div className="mt-1 w-px flex-1 bg-border" />
-                            </div>
-                            <div className="flex-1 pb-5">
-                              <button
-                                type="button"
-                                onClick={addStop}
-                                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                              >
-                                <PlusIcon className="size-3" weight="bold" />
-                                Add stop
-                              </button>
-                            </div>
-                          </div>
-                          {custIdx !== -1 && (
-                            <WaypointRow label={custLabel} pinColor="red" showLine={false}>
-                              <PlaceSearch
-                                preferConfirmScreen
-                                value={route.wps[custIdx].place}
-                                onChange={(v) => updateWp(custIdx, v)}
-                                placeholder="Customer drop address…"
-                              />
-                            </WaypointRow>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {custIdx !== -1 && (
-                            <WaypointRow label={custLabel} pinColor="green" showLine>
-                              <PlaceSearch
-                                preferConfirmScreen
-                                value={route.wps[custIdx].place}
-                                onChange={(v) => updateWp(custIdx, v)}
-                                placeholder="Customer pickup address…"
-                              />
-                            </WaypointRow>
-                          )}
-                          {route.wps.map((wp, i) =>
-                            wp.type !== WaypointType.STOP ? null : (
-                              <WaypointRow
-                                key={i}
-                                label={`Stop ${stopWps.indexOf(wp) + 1}`}
-                                pinColor="amber"
-                                showLine
-                              >
-                                <div className="flex min-w-0 items-start gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <PlaceSearch
-                                      preferConfirmScreen
-                                      value={wp.place}
-                                      onChange={(v) => updateWp(i, v)}
-                                      placeholder={`Stop ${stopWps.indexOf(wp) + 1}…`}
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeStop(i)}
-                                    className="mt-2.5 shrink-0 text-muted-foreground hover:text-destructive"
-                                  >
-                                    <TrashIcon className="size-3.5" weight="bold" />
-                                  </button>
-                                </div>
-                              </WaypointRow>
-                            )
-                          )}
-                          <div className="flex gap-3">
-                            <div className="flex flex-col items-center pt-2.5">
-                              <div className="size-4" />
-                              <div className="mt-1 w-px flex-1 bg-border" />
-                            </div>
-                            <div className="flex-1 pb-5">
-                              <button
-                                type="button"
-                                onClick={addStop}
-                                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                              >
-                                <PlusIcon className="size-3" weight="bold" />
-                                Add stop
-                              </button>
-                            </div>
-                          </div>
-                          {aptIdx !== -1 && (
-                            <WaypointRow label={aptLabel} pinColor="red" showLine={false}>
-                              <AirportPicker
-                                city={aptResolved.city}
-                                terminalIdx={aptResolved.terminalIdx}
-                                onAirportChange={(c, ti) => syncAirportFromPicker(c, ti)}
-                              />
-                            </WaypointRow>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )
-                })()}
-
-              {booking.tripType === TripType.HOURLY_RENTALS && pickupIdx !== -1 && (
-                <WaypointRow label="Pickup" pinColor="green" showLine={false}>
-                  <PlaceSearch
-                    preferConfirmScreen
-                    value={route.wps[pickupIdx].place}
-                    onChange={(v) => updateWp(pickupIdx, v)}
-                    placeholder="Search pickup…"
+              <DetailSnapGrid>
+                <DetailSnapCell>
+                  <InfoField snapshot dense label="Ride date" value={booking.rideDate} />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Pickup time"
+                    value={formatHmTo12h(booking.pickupTime)}
                   />
-                </WaypointRow>
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField snapshot dense label="Source" value={booking.bookingSource} />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Customer"
+                    value={booking.metadata.customerName}
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Contact"
+                    value={booking.metadata.customerContact}
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField snapshot dense label="Type" value={booking.metadata.customerType} />
+                </DetailSnapCell>
+                {booking.tripType === TripType.AIRPORT_TRANSFER && (
+                  <>
+                    <DetailSnapCell>
+                      <InfoField
+                        snapshot
+                        dense
+                        label="Flight type"
+                        value={booking.metadata.flightType}
+                      />
+                    </DetailSnapCell>
+                    <DetailSnapCell>
+                      <InfoField
+                        snapshot
+                        dense
+                        label="Flight no"
+                        value={booking.metadata.flightNo}
+                      />
+                    </DetailSnapCell>
+                  </>
+                )}
+                {booking.tripType === TripType.HOURLY_RENTALS && (
+                  <DetailSnapCell span2>
+                    <InfoField
+                      snapshot
+                      dense
+                      label="Package"
+                      value={
+                        booking.hourlyPackage
+                          ? `${booking.hourlyPackage.hourlyPackageDetails.hours}h / ${booking.hourlyPackage.hourlyPackageDetails.km}km`
+                          : null
+                      }
+                    />
+                  </DetailSnapCell>
+                )}
+                <DetailSnapCell span2>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Remarks"
+                    value={booking.metadata.remarks ?? null}
+                  />
+                </DetailSnapCell>
+              </DetailSnapGrid>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <SectionTitle>Route</SectionTitle>
+              {isCancelledBooking && (
+                <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-muted-foreground">
+                  {msgCancelledReadonly}
+                </p>
               )}
-            </fieldset>
+              <fieldset
+                disabled={isCancelledBooking}
+                className="m-0 min-w-0 border-0 p-0 disabled:pointer-events-none disabled:opacity-[0.58]"
+              >
+                <div className="mb-6 border border-border bg-muted/20 p-4">
+                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Waypoints
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {route.wps.map((wp, i) => (
+                      <li
+                        key={wp.dbId ?? `wp_${i}_${wp.type}`}
+                        className="flex gap-3 border-l-2 border-l-primary/40 pl-3 text-xs leading-relaxed"
+                      >
+                        <span className="shrink-0 font-bold uppercase tracking-wider text-muted-foreground">
+                          {wp.type.replace(/_/g, ' ')}
+                        </span>
+                        <span className="min-w-0 flex-1 text-foreground">
+                          {wp.place.address || '—'}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          {wp.place.latitude != null &&
+                          wp.place.longitude != null &&
+                          Number.isFinite(wp.place.latitude) &&
+                          Number.isFinite(wp.place.longitude)
+                            ? `${wp.place.latitude.toFixed(5)}, ${wp.place.longitude.toFixed(5)}`
+                            : '—'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
 
-            {route.error && <p className="mt-3 text-sm text-destructive">{route.error}</p>}
-            <div className="mt-6 flex justify-end">
-              <DisableWithTooltip disabled={isCancelledBooking} tooltip={msgCancelledReadonly}>
-                <Button type="button" disabled={route.saving} onClick={handleSaveRoute}>
-                  {route.saving ? 'Saving…' : 'Save Route'}
-                </Button>
-              </DisableWithTooltip>
-            </div>
-          </CardContent>
-        </Card>
+                {booking.tripType === TripType.ONE_WAY && (
+                  <>
+                    {pickupIdx !== -1 && (
+                      <WaypointRow label="Pickup" pinColor="green" showLine>
+                        <PlaceSearch
+                          preferConfirmScreen
+                          value={route.wps[pickupIdx].place}
+                          onChange={(v) => updateWp(pickupIdx, v)}
+                          placeholder="Search pickup…"
+                        />
+                      </WaypointRow>
+                    )}
+                    {route.wps.map((wp, i) =>
+                      wp.type !== WaypointType.STOP ? null : (
+                        <WaypointRow
+                          key={i}
+                          label={`Stop ${stopWps.indexOf(wp) + 1}`}
+                          pinColor="amber"
+                          showLine
+                        >
+                          <div className="flex min-w-0 items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <PlaceSearch
+                                preferConfirmScreen
+                                value={wp.place}
+                                onChange={(v) => updateWp(i, v)}
+                                placeholder={`Stop ${stopWps.indexOf(wp) + 1} address…`}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeStop(i)}
+                              className="mt-2.5 shrink-0 text-muted-foreground hover:text-destructive"
+                            >
+                              <TrashIcon className="size-3.5" weight="bold" />
+                            </button>
+                          </div>
+                        </WaypointRow>
+                      )
+                    )}
+                    <div className="flex gap-3">
+                      <div className="flex flex-col items-center pt-2.5">
+                        <div className="size-4" />
+                        <div className="mt-1 w-px flex-1 bg-border" />
+                      </div>
+                      <div className="flex-1 pb-5">
+                        <button
+                          type="button"
+                          onClick={addStop}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <PlusIcon className="size-3" weight="bold" />
+                          Add stop
+                        </button>
+                      </div>
+                    </div>
+                    {dropIdx !== -1 && (
+                      <WaypointRow label="Drop" pinColor="red" showLine={false}>
+                        <PlaceSearch
+                          preferConfirmScreen
+                          value={route.wps[dropIdx].place}
+                          onChange={(v) => updateWp(dropIdx, v)}
+                          placeholder="Search drop…"
+                        />
+                      </WaypointRow>
+                    )}
+                  </>
+                )}
 
-        <Card>
-          <CardContent>
-            <div className="mb-5 flex items-center justify-between">
-              <SectionTitle className="mb-0">Assigned Vehicles</SectionTitle>
-              <DisableWithTooltip disabled={addVehicleDisabled} tooltip={addVehicleTooltip}>
-                <Button size="sm" onClick={openAddVehicle}>
-                  <PlusIcon className="mr-1.5 size-3.5" weight="bold" />
-                  Add Vehicle
-                </Button>
-              </DisableWithTooltip>
-            </div>
+                {booking.tripType === TripType.AIRPORT_TRANSFER &&
+                  (() => {
+                    const aptIdx =
+                      booking.metadata.flightType === FlightType.ARRIVAL ? pickupIdx : dropIdx
+                    const custIdx =
+                      booking.metadata.flightType === FlightType.ARRIVAL ? dropIdx : pickupIdx
+                    const aptLabel =
+                      booking.metadata.flightType === FlightType.ARRIVAL
+                        ? 'Pickup — Airport'
+                        : 'Drop — Airport'
+                    const custLabel =
+                      booking.metadata.flightType === FlightType.ARRIVAL ? 'Drop' : 'Pickup'
 
-            {vehicles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No vehicles assigned yet.</p>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {vehicles.map((v) => (
-                  <div key={v.id} className="border border-border p-5">
-                    <div className="mb-4 flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <Chip label={v.status} className={VEHICLE_STATUS_CLASS[v.status]} />
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <p className="text-sm font-semibold">{v.metadata.categoryName}</p>
-                          {(v.metadata.vehicleBrand || v.metadata.vehicleModel) && (
-                            <>
-                              <span className="text-muted-foreground/40" aria-hidden>
-                                ·
-                              </span>
-                              <p className="text-xs font-medium text-foreground">
-                                {[v.metadata.vehicleBrand, v.metadata.vehicleModel]
-                                  .filter(Boolean)
-                                  .join(' ')}
-                              </p>
-                            </>
+                    return (
+                      <>
+                        <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground">
+                          {booking.metadata.flightType === FlightType.ARRIVAL ? (
+                            <AirplaneLandingIcon className="size-4" />
+                          ) : (
+                            <AirplaneTakeoffIcon className="size-4" />
+                          )}
+                          <span className="font-semibold uppercase tracking-wider">
+                            {booking.metadata.flightType ?? 'Arrival'}
+                          </span>
+                          {booking.metadata.flightNo && (
+                            <span className="ml-1 font-mono">· {booking.metadata.flightNo}</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {v.vehicleNumber ?? '—'}
-                          {v.metadata.chauffeurName && ` · ${v.metadata.chauffeurName}`}
-                          {v.metadata.chauffeurContact && ` · ${v.metadata.chauffeurContact}`}
+
+                        {booking.metadata.flightType === FlightType.ARRIVAL ? (
+                          <>
+                            {aptIdx !== -1 && (
+                              <WaypointRow label={aptLabel} pinColor="green" showLine>
+                                <AirportPicker
+                                  city={aptResolved.city}
+                                  terminalIdx={aptResolved.terminalIdx}
+                                  onAirportChange={(c, ti) => syncAirportFromPicker(c, ti)}
+                                />
+                              </WaypointRow>
+                            )}
+                            {route.wps.map((wp, i) =>
+                              wp.type !== WaypointType.STOP ? null : (
+                                <WaypointRow
+                                  key={i}
+                                  label={`Stop ${stopWps.indexOf(wp) + 1}`}
+                                  pinColor="amber"
+                                  showLine
+                                >
+                                  <div className="flex min-w-0 items-start gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <PlaceSearch
+                                        preferConfirmScreen
+                                        value={wp.place}
+                                        onChange={(v) => updateWp(i, v)}
+                                        placeholder={`Stop ${stopWps.indexOf(wp) + 1}…`}
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeStop(i)}
+                                      className="mt-2.5 shrink-0 text-muted-foreground hover:text-destructive"
+                                    >
+                                      <TrashIcon className="size-3.5" weight="bold" />
+                                    </button>
+                                  </div>
+                                </WaypointRow>
+                              )
+                            )}
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center pt-2.5">
+                                <div className="size-4" />
+                                <div className="mt-1 w-px flex-1 bg-border" />
+                              </div>
+                              <div className="flex-1 pb-5">
+                                <button
+                                  type="button"
+                                  onClick={addStop}
+                                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  <PlusIcon className="size-3" weight="bold" />
+                                  Add stop
+                                </button>
+                              </div>
+                            </div>
+                            {custIdx !== -1 && (
+                              <WaypointRow label={custLabel} pinColor="red" showLine={false}>
+                                <PlaceSearch
+                                  preferConfirmScreen
+                                  value={route.wps[custIdx].place}
+                                  onChange={(v) => updateWp(custIdx, v)}
+                                  placeholder="Customer drop address…"
+                                />
+                              </WaypointRow>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {custIdx !== -1 && (
+                              <WaypointRow label={custLabel} pinColor="green" showLine>
+                                <PlaceSearch
+                                  preferConfirmScreen
+                                  value={route.wps[custIdx].place}
+                                  onChange={(v) => updateWp(custIdx, v)}
+                                  placeholder="Customer pickup address…"
+                                />
+                              </WaypointRow>
+                            )}
+                            {route.wps.map((wp, i) =>
+                              wp.type !== WaypointType.STOP ? null : (
+                                <WaypointRow
+                                  key={i}
+                                  label={`Stop ${stopWps.indexOf(wp) + 1}`}
+                                  pinColor="amber"
+                                  showLine
+                                >
+                                  <div className="flex min-w-0 items-start gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <PlaceSearch
+                                        preferConfirmScreen
+                                        value={wp.place}
+                                        onChange={(v) => updateWp(i, v)}
+                                        placeholder={`Stop ${stopWps.indexOf(wp) + 1}…`}
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeStop(i)}
+                                      className="mt-2.5 shrink-0 text-muted-foreground hover:text-destructive"
+                                    >
+                                      <TrashIcon className="size-3.5" weight="bold" />
+                                    </button>
+                                  </div>
+                                </WaypointRow>
+                              )
+                            )}
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center pt-2.5">
+                                <div className="size-4" />
+                                <div className="mt-1 w-px flex-1 bg-border" />
+                              </div>
+                              <div className="flex-1 pb-5">
+                                <button
+                                  type="button"
+                                  onClick={addStop}
+                                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  <PlusIcon className="size-3" weight="bold" />
+                                  Add stop
+                                </button>
+                              </div>
+                            </div>
+                            {aptIdx !== -1 && (
+                              <WaypointRow label={aptLabel} pinColor="red" showLine={false}>
+                                <AirportPicker
+                                  city={aptResolved.city}
+                                  terminalIdx={aptResolved.terminalIdx}
+                                  onAirportChange={(c, ti) => syncAirportFromPicker(c, ti)}
+                                />
+                              </WaypointRow>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )
+                  })()}
+
+                {booking.tripType === TripType.HOURLY_RENTALS && pickupIdx !== -1 && (
+                  <WaypointRow label="Pickup" pinColor="green" showLine={false}>
+                    <PlaceSearch
+                      preferConfirmScreen
+                      value={route.wps[pickupIdx].place}
+                      onChange={(v) => updateWp(pickupIdx, v)}
+                      placeholder="Search pickup…"
+                    />
+                  </WaypointRow>
+                )}
+              </fieldset>
+
+              {route.error && <p className="mt-3 text-sm text-destructive">{route.error}</p>}
+              <div className="mt-6 flex justify-end">
+                <DisableWithTooltip disabled={isCancelledBooking} tooltip={msgCancelledReadonly}>
+                  <Button type="button" disabled={route.saving} onClick={handleSaveRoute}>
+                    {route.saving ? 'Saving…' : 'Save Route'}
+                  </Button>
+                </DisableWithTooltip>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card>
+            <CardContent>
+              <div className="mb-5 flex items-center justify-between">
+                <SectionTitle className="mb-0">Vehicle assignment</SectionTitle>
+                <DisableWithTooltip disabled={addVehicleDisabled} tooltip={addVehicleTooltip}>
+                  <Button size="sm" onClick={openAddVehicle}>
+                    <PlusIcon className="mr-1.5 size-3.5" weight="bold" />
+                    Add Vehicle
+                  </Button>
+                </DisableWithTooltip>
+              </div>
+
+              {vehicles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No vehicles assigned yet.</p>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {vehicles.map((v) => (
+                    <div key={v.id} className="space-y-5 border border-border p-5">
+                      <div className="space-y-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          1 · Vehicle &amp; chauffeur
                         </p>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <DisableWithTooltip
-                          disabled={vehicleRowLocked}
-                          tooltip={msgCancelledReadonly}
-                        >
-                          <Button size="sm" onClick={() => void openEditBookingVehicle(v)}>
-                            <PencilSimpleIcon className="mr-1.5 size-3.5" weight="bold" />
-                            Update
-                          </Button>
-                        </DisableWithTooltip>
-                        <DisableWithTooltip
-                          disabled={vehicleRowLocked}
-                          tooltip={msgCancelledReadonly}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteVehicle(v.id)}
-                            className="rounded-md border border-transparent p-1.5 text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive disabled:opacity-45"
-                            aria-label="Remove vehicle"
-                          >
-                            <TrashIcon className="size-4" weight="bold" />
-                          </button>
-                        </DisableWithTooltip>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <div className="grid grid-cols-4 gap-5">
-                        <InfoField
-                          label="Base Fare"
-                          value={`₹${v.baseFare.toLocaleString('en-IN')}`}
-                        />
-                        <InfoField
-                          label="Actual Fare"
-                          value={`₹${v.actualFare.toLocaleString('en-IN')}`}
-                        />
-                        <InfoField
-                          label="Advance"
-                          value={`₹${v.advanceAmount.toLocaleString('en-IN')}`}
-                        />
-                        <InfoField
-                          label="Balance"
-                          value={`₹${v.balanceAmount.toLocaleString('en-IN')}`}
-                        />
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <Chip label={v.status} className={VEHICLE_STATUS_CLASS[v.status]} />
+                            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <p className="text-sm font-semibold">{v.metadata.categoryName}</p>
+                              {(v.metadata.vehicleBrand || v.metadata.vehicleModel) && (
+                                <>
+                                  <span className="text-muted-foreground/40" aria-hidden>
+                                    ·
+                                  </span>
+                                  <p className="text-xs font-medium text-foreground">
+                                    {[v.metadata.vehicleBrand, v.metadata.vehicleModel]
+                                      .filter(Boolean)
+                                      .join(' ')}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {v.vehicleNumber ?? '—'}
+                              {v.metadata.chauffeurName && ` · ${v.metadata.chauffeurName}`}
+                              {v.metadata.chauffeurContact && ` · ${v.metadata.chauffeurContact}`}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            <DisableWithTooltip
+                              disabled={vehicleRowLocked}
+                              tooltip={msgCancelledReadonly}
+                            >
+                              <Button
+                                size="sm"
+                                className="rounded-none"
+                                onClick={() => void openEditBookingVehicle(v)}
+                              >
+                                <PencilSimpleIcon className="mr-1.5 size-3.5" weight="bold" />
+                                Update
+                              </Button>
+                            </DisableWithTooltip>
+                            <DisableWithTooltip
+                              disabled={vehicleRowLocked}
+                              tooltip={msgCancelledReadonly}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteVehicle(v.id)}
+                                className="rounded-none border border-transparent p-1.5 text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive disabled:opacity-45"
+                                aria-label="Remove this vehicle from the booking"
+                              >
+                                <TrashIcon className="size-4" weight="bold" />
+                              </button>
+                            </DisableWithTooltip>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        <DisableWithTooltip
-                          disabled={vehicleRowLocked}
-                          tooltip={msgCancelledReadonly}
-                        >
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-1 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                            onClick={() => openFareSheet(v)}
+                      <div className="border-t border-border pt-5">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          2 · Fare &amp; collections
+                        </p>
+                        <div className="mt-3 grid grid-cols-2 gap-5 lg:grid-cols-4">
+                          <InfoField
+                            label="Base fare"
+                            value={`₹${v.baseFare.toLocaleString('en-IN')}`}
+                          />
+                          <InfoField
+                            label="Ride price (actual)"
+                            value={`₹${v.actualFare.toLocaleString('en-IN')}`}
+                          />
+                          <InfoField
+                            label="Advance collected"
+                            value={`₹${v.advanceAmount.toLocaleString('en-IN')}`}
+                          />
+                          <InfoField
+                            label="Balance due"
+                            value={`₹${v.balanceAmount.toLocaleString('en-IN')}`}
+                          />
+                        </div>
+                        <div className="mt-4 flex justify-end">
+                          <DisableWithTooltip
+                            disabled={vehicleRowLocked}
+                            tooltip={msgCancelledReadonly}
                           >
-                            <CoinsIcon className="size-3.5 shrink-0" weight="bold" />
-                            Fare
-                          </Button>
-                        </DisableWithTooltip>
-                        <DisableWithTooltip
-                          disabled={vehicleRowLocked}
-                          tooltip={msgCancelledReadonly}
-                        >
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-1 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                            onClick={() => openChargesSheet(v.id)}
-                          >
-                            <ReceiptIcon className="size-3.5 shrink-0" weight="bold" />
-                            Extra charges
-                          </Button>
-                        </DisableWithTooltip>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 gap-1.5 rounded-none px-4 text-[11px] font-medium"
+                              onClick={() => openFareSheet(v)}
+                            >
+                              <CoinsIcon className="size-3.5 shrink-0" weight="bold" />
+                              Edit fare
+                            </Button>
+                          </DisableWithTooltip>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-border pt-5">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          3 · Ride extras
+                        </p>
+                        <div className="mt-3">
+                          {vehicleRowLocked ? (
+                            <BookingVehicleExtraChargesInline
+                              bookingVehicleId={v.id}
+                              readOnly
+                              additionalCharges={v.additionalCharges}
+                              totalAdditionalAmount={v.totalAdditionalAmount}
+                            />
+                          ) : (
+                            <BookingVehicleExtraChargesInline
+                              bookingVehicleId={v.id}
+                              readOnly={false}
+                              onChargesSaved={() =>
+                                void fetchAndApplyBooking(booking.id, { reloadVehicles: true })
+                              }
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <SectionTitle>Financials</SectionTitle>
+              <DetailSnapGrid>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Estimated fare"
+                    value={
+                      booking.estimatedFare != null
+                        ? `₹${booking.estimatedFare.toLocaleString('en-IN')}`
+                        : null
+                    }
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Actual fare"
+                    value={
+                      booking.actualFare != null
+                        ? `₹${booking.actualFare.toLocaleString('en-IN')}`
+                        : null
+                    }
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Total fare"
+                    value={
+                      booking.totalFare != null
+                        ? `₹${booking.totalFare.toLocaleString('en-IN')}`
+                        : null
+                    }
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Advance"
+                    value={
+                      booking.advanceAmount != null
+                        ? `₹${booking.advanceAmount.toLocaleString('en-IN')}`
+                        : null
+                    }
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Balance"
+                    value={
+                      booking.balanceAmount != null
+                        ? `₹${booking.balanceAmount.toLocaleString('en-IN')}`
+                        : null
+                    }
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField snapshot dense label="Payment mode" value={booking.paymentMode} />
+                </DetailSnapCell>
+              </DetailSnapGrid>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <SectionTitle className="mb-0">Special details</SectionTitle>
+                <DisableWithTooltip disabled={isCancelledBooking} tooltip={msgCancelledReadonly}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    type="button"
+                    onClick={() => openEdit('special')}
+                  >
+                    <PencilSimpleIcon className="size-3.5" weight="bold" />
+                    Edit
+                  </Button>
+                </DisableWithTooltip>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <DetailSnapGrid>
+                <DetailSnapCell>
+                  <InfoField snapshot dense label="Vehicle category" value={sr?.vehicleCategory} />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField snapshot dense label="Vehicle" value={sr?.vehicle} />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Fleet size"
+                    value={String(sr?.numberOfVehicles ?? 0)}
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Passengers"
+                    value={`Adults ${sr?.passengers?.adults ?? 0} · Children ${sr?.passengers?.children ?? 0}`}
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell span2>
+                  <InfoField
+                    snapshot
+                    dense
+                    label="Luggage"
+                    value={`Large ${sr?.luggage?.large ?? 0} · Medium ${sr?.luggage?.medium ?? 0} · Small ${sr?.luggage?.small ?? 0}`}
+                  />
+                </DetailSnapCell>
+                <DetailSnapCell span2>
+                  <InfoField snapshot dense label="Beverages" value={specialRequestBeveragesLine} />
+                </DetailSnapCell>
+                <DetailSnapCell span2>
+                  <InfoField snapshot dense label="Other notes" value={sr?.other} />
+                </DetailSnapCell>
+              </DetailSnapGrid>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Sheet
@@ -1856,8 +1926,8 @@ export function BookingDetail() {
                   Special request
                 </p>
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-5">
-                    <Field className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-5 md:flex-row md:items-end md:gap-5">
+                    <Field className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Vehicle Category
                       </FieldLabel>
@@ -1890,7 +1960,7 @@ export function BookingDetail() {
                         </Select>
                       </FieldContent>
                     </Field>
-                    <Field className="flex flex-col gap-1.5">
+                    <Field className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Vehicle <span className="font-normal">(matches name)</span>
                       </FieldLabel>
@@ -1917,89 +1987,95 @@ export function BookingDetail() {
                         </Select>
                       </FieldContent>
                     </Field>
+                    <Field className="flex min-w-0 shrink-0 flex-col gap-1.5 md:w-[11.5rem]">
+                      <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Number of vehicles
+                      </FieldLabel>
+                      <FieldContent>
+                        <InlineQuantityStepper
+                          value={srWatch.numberOfVehicles ?? 0}
+                          onChange={(nv) => srForm.setValue('numberOfVehicles', nv)}
+                        />
+                      </FieldContent>
+                    </Field>
                   </div>
 
-                  <CounterRow
-                    label="Number of Vehicles"
-                    value={srWatch.numberOfVehicles ?? 0}
-                    onChange={(nv) => srForm.setValue('numberOfVehicles', nv)}
-                  />
-
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      Passengers
-                    </p>
-                    <div className="flex flex-col gap-3 border border-border p-4">
-                      <CounterRow
-                        label="Adults"
-                        value={srWatch.passengers?.adults ?? 0}
-                        onChange={(nv) =>
-                          srForm.setValue('passengers', {
-                            adults: nv,
-                            children: srWatch.passengers?.children ?? 0,
-                          })
-                        }
-                      />
-                      <CounterRow
-                        label="Children"
-                        value={srWatch.passengers?.children ?? 0}
-                        onChange={(nv) =>
-                          srForm.setValue('passengers', {
-                            adults: srWatch.passengers?.adults ?? 0,
-                            children: nv,
-                          })
-                        }
-                      />
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Passengers
+                      </p>
+                      <div className="flex flex-col gap-3 border border-border p-4">
+                        <CounterRow
+                          label="Adults"
+                          value={srWatch.passengers?.adults ?? 0}
+                          onChange={(nv) =>
+                            srForm.setValue('passengers', {
+                              adults: nv,
+                              children: srWatch.passengers?.children ?? 0,
+                            })
+                          }
+                        />
+                        <CounterRow
+                          label="Children"
+                          value={srWatch.passengers?.children ?? 0}
+                          onChange={(nv) =>
+                            srForm.setValue('passengers', {
+                              adults: srWatch.passengers?.adults ?? 0,
+                              children: nv,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      Luggage
-                    </p>
-                    <div className="flex flex-col gap-3 border border-border p-4">
-                      <CounterRow
-                        label="Large"
-                        value={srWatch.luggage?.large ?? 0}
-                        onChange={(nv) =>
-                          srForm.setValue('luggage', {
-                            large: nv,
-                            medium: srWatch.luggage?.medium ?? 0,
-                            small: srWatch.luggage?.small ?? 0,
-                          })
-                        }
-                      />
-                      <CounterRow
-                        label="Medium"
-                        value={srWatch.luggage?.medium ?? 0}
-                        onChange={(nv) =>
-                          srForm.setValue('luggage', {
-                            large: srWatch.luggage?.large ?? 0,
-                            medium: nv,
-                            small: srWatch.luggage?.small ?? 0,
-                          })
-                        }
-                      />
-                      <CounterRow
-                        label="Small"
-                        value={srWatch.luggage?.small ?? 0}
-                        onChange={(nv) =>
-                          srForm.setValue('luggage', {
-                            large: srWatch.luggage?.large ?? 0,
-                            medium: srWatch.luggage?.medium ?? 0,
-                            small: nv,
-                          })
-                        }
-                      />
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Luggage
+                      </p>
+                      <div className="flex flex-col gap-3 border border-border p-4">
+                        <CounterRow
+                          label="Large"
+                          value={srWatch.luggage?.large ?? 0}
+                          onChange={(nv) =>
+                            srForm.setValue('luggage', {
+                              large: nv,
+                              medium: srWatch.luggage?.medium ?? 0,
+                              small: srWatch.luggage?.small ?? 0,
+                            })
+                          }
+                        />
+                        <CounterRow
+                          label="Medium"
+                          value={srWatch.luggage?.medium ?? 0}
+                          onChange={(nv) =>
+                            srForm.setValue('luggage', {
+                              large: srWatch.luggage?.large ?? 0,
+                              medium: nv,
+                              small: srWatch.luggage?.small ?? 0,
+                            })
+                          }
+                        />
+                        <CounterRow
+                          label="Small"
+                          value={srWatch.luggage?.small ?? 0}
+                          onChange={(nv) =>
+                            srForm.setValue('luggage', {
+                              large: srWatch.luggage?.large ?? 0,
+                              medium: srWatch.luggage?.medium ?? 0,
+                              small: nv,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {resources.beverageOptions.length > 0 && (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                       <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Beverages
                       </p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-3">
                         {resources.beverageOptions.map((bev) => {
                           const selected = (srWatch.beverages ?? []).includes(bev)
                           return (
@@ -2015,10 +2091,10 @@ export function BookingDetail() {
                                 )
                               }
                               className={cn(
-                                'border px-3 py-1.5 text-xs font-medium transition-colors',
+                                'min-h-11 min-w-fit border px-4 py-2.5 text-sm font-medium transition-colors',
                                 selected
                                   ? 'border-primary bg-primary/10 text-primary'
-                                  : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                  : 'border-border text-foreground hover:bg-muted/60'
                               )}
                             >
                               {bev}
@@ -2069,7 +2145,7 @@ export function BookingDetail() {
       <Sheet open={fareSheet.open} onOpenChange={(o) => setFareSheet((s) => ({ ...s, open: o }))}>
         <SheetContent className="flex min-w-95 flex-col gap-0 p-0">
           <SheetHeader className="border-b border-border px-8 py-6">
-            <SheetTitle>Edit Fare</SheetTitle>
+            <SheetTitle>Edit fare</SheetTitle>
             {fareSheet.vehicle && (
               <p className="text-sm text-muted-foreground">
                 {fareSheet.vehicle.metadata.categoryName} · {fareSheet.vehicle.vehicleNumber ?? '—'}
@@ -2116,123 +2192,9 @@ export function BookingDetail() {
                 Cancel
               </Button>
               <Button disabled={fareSheet.saving} onClick={handleSaveFare}>
-                {fareSheet.saving ? 'Saving…' : 'Save Fare'}
+                {fareSheet.saving ? 'Saving…' : 'Save fare'}
               </Button>
             </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet
-        open={chargesSheet.open}
-        onOpenChange={(o) => setChargesSheet((s) => ({ ...s, open: o }))}
-      >
-        <SheetContent className="flex min-w-95 flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-border px-8 py-6">
-            <SheetTitle>Extra Charges</SheetTitle>
-          </SheetHeader>
-          <div className="flex flex-col gap-6 px-8 py-6">
-            {chargesSheet.loading ? (
-              <p className="text-sm text-muted-foreground">Loading charges…</p>
-            ) : (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  Any extra charges, tolls, or parking fees can be added here, while the ride is in
-                  progress.
-                </p>
-                <div className="flex flex-col gap-3">
-                  {chargesSheet.chargeRows.map((row) => (
-                    <div
-                      key={row.key}
-                      className="flex flex-col gap-2 border border-border p-3 sm:flex-row sm:items-end sm:gap-3"
-                    >
-                      <Field className="min-w-0 flex-1 flex-col gap-1.5">
-                        <FieldLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Type
-                        </FieldLabel>
-                        <FieldContent>
-                          <Select
-                            value={row.type}
-                            onValueChange={(v) =>
-                              updateChargeRow(row.key, { type: v as VehicleChargeType })
-                            }
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={VehicleChargeType.MC_FARE}>MC Fare</SelectItem>
-                              <SelectItem value={VehicleChargeType.TOLL_CHARGE}>Toll</SelectItem>
-                              <SelectItem value={VehicleChargeType.PARKING_CHARGE}>
-                                Parking
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FieldContent>
-                      </Field>
-                      <Field className="w-full flex-col gap-1.5 sm:w-32">
-                        <FieldLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Amount (₹)
-                        </FieldLabel>
-                        <FieldContent>
-                          <InputGroup className="w-full">
-                            <InputGroupInput
-                              type="number"
-                              step="0.01"
-                              value={
-                                row.amount === null || row.amount === undefined ? '' : row.amount
-                              }
-                              onChange={(e) => {
-                                const raw = e.target.value
-                                if (raw === '') updateChargeRow(row.key, { amount: null })
-                                else {
-                                  const n = Number(raw)
-                                  updateChargeRow(row.key, {
-                                    amount: Number.isFinite(n) ? n : null,
-                                  })
-                                }
-                              }}
-                            />
-                          </InputGroup>
-                        </FieldContent>
-                      </Field>
-                      <button
-                        type="button"
-                        onClick={() => removeChargeRow(row.key)}
-                        className="self-end text-muted-foreground hover:text-destructive sm:self-center"
-                        aria-label="Remove charge row"
-                      >
-                        <TrashIcon className="size-5" weight="bold" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-fit"
-                  onClick={addChargeRow}
-                >
-                  <PlusIcon className="mr-2 size-3.5" weight="bold" />
-                  Add charge
-                </Button>
-                {chargesSheet.error && (
-                  <p className="text-sm text-destructive">{chargesSheet.error}</p>
-                )}
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setChargesSheet((s) => ({ ...s, open: false }))}
-                  >
-                    Cancel
-                  </Button>
-                  <Button disabled={chargesSheet.saving} onClick={handleSaveCharges}>
-                    {chargesSheet.saving ? 'Saving…' : 'Save Charges'}
-                  </Button>
-                </div>
-              </>
-            )}
           </div>
         </SheetContent>
       </Sheet>

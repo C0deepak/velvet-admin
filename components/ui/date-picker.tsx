@@ -12,6 +12,7 @@ type DatePickerProps = {
   onChange: (v: string) => void
   placeholder?: string
   error?: boolean
+  minDate?: Date
 }
 
 export function DatePicker({
@@ -19,6 +20,7 @@ export function DatePicker({
   onChange,
   placeholder = 'Select date…',
   error,
+  minDate,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const date = value ? new Date(value + 'T00:00:00') : undefined
@@ -46,6 +48,7 @@ export function DatePicker({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
+          disabled={minDate ? { before: minDate } : undefined}
           selected={date}
           onSelect={(d) => {
             if (d) {

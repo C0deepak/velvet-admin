@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { startOfDay } from 'date-fns'
 import {
   AirplaneLandingIcon,
   AirplaneTakeoffIcon,
@@ -118,6 +119,38 @@ function WaypointRow({
   )
 }
 
+/** +/− controls only; pair with `FieldLabel` like category / vehicle selects. */
+function InlineQuantityStepper({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <div className="grid w-full grid-cols-3 gap-2">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        disabled={value <= 0}
+        className="flex h-10 w-full items-center justify-center border border-border bg-transparent text-base font-semibold transition-colors hover:bg-muted disabled:opacity-40"
+      >
+        −
+      </button>
+      <span className="flex h-10 w-full items-center justify-center text-sm font-semibold tabular-nums text-foreground">
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        className="flex h-10 w-full items-center justify-center border border-border bg-transparent text-base font-semibold transition-colors hover:bg-muted"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 function CounterRow({
   label,
   value,
@@ -152,6 +185,17 @@ function CounterRow({
   )
 }
 
+function contactKeyFromValidatedStep(step: Pick<TCustomerStep, 'countryCode' | 'phone'>): string {
+  return `${step.countryCode}|${step.phone}`
+}
+
+function contactKeyFromInputs(
+  countryCode: string | undefined,
+  rawPhone: string | undefined
+): string {
+  return `${(countryCode ?? '').trim()}|${(rawPhone ?? '').replace(/\D/g, '')}`
+}
+
 export function BookingForm() {
   const router = useRouter()
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -167,6 +211,8 @@ export function BookingForm() {
     nameLoading: false,
     error: null as string | null,
   })
+  const [lastFetchedContactKey, setLastFetchedContactKey] = useState<string | null>(null)
+  const customerLookupEpochRef = useRef(0)
 
   const [sched, setSched] = useState({
     tripType: TripType.ONE_WAY,
@@ -240,12 +286,29 @@ export function BookingForm() {
       .catch(() => {})
   }, [sched.tripType, hourly.packages.length])
 
+  const watchedCountryCode = useWatch({ control: step1Form.control, name: 'countryCode' })
+  const watchedPhone = useWatch({ control: step1Form.control, name: 'phone' })
+
+  useEffect(() => {
+    const typedKey = contactKeyFromInputs(watchedCountryCode, watchedPhone)
+    if (cust.data == null || lastFetchedContactKey === null || typedKey === lastFetchedContactKey)
+      return
+    customerLookupEpochRef.current += 1
+    setCust((s) => ({ ...s, data: null, nameInput: '', error: null, loading: false }))
+    setLastFetchedContactKey(null)
+  }, [watchedCountryCode, watchedPhone, cust.data, lastFetchedContactKey])
+
   async function findCustomer(data: TCustomerStep) {
+    const requestEpoch = ++customerLookupEpochRef.current
     setCust((s) => ({ ...s, loading: true, error: null }))
     try {
       const { data: c } = await findOrCreateCustomer(data)
+      if (customerLookupEpochRef.current !== requestEpoch) return
+      const fetchedKey = contactKeyFromValidatedStep(data)
       setCust((s) => ({ ...s, data: c, nameInput: c.name ?? '', loading: false }))
+      setLastFetchedContactKey(fetchedKey)
     } catch (err) {
+      if (customerLookupEpochRef.current !== requestEpoch) return
       setCust((s) => ({ ...s, loading: false, error: getApiErrorMessage(err) }))
     }
   }
@@ -588,6 +651,7 @@ export function BookingForm() {
                     <FieldContent>
                       <DatePicker
                         value={sched.rideDate}
+                        minDate={startOfDay(new Date())}
                         onChange={(v) => setSched((s) => ({ ...s, rideDate: v }))}
                         error={attemptedStep2Submit && !sched.rideDate}
                       />
@@ -1051,8 +1115,8 @@ export function BookingForm() {
             {step3.srOpen && (
               <div className="border-t border-border px-8 pb-8 pt-6">
                 <div className="flex flex-col gap-6">
-                  <div className="grid grid-cols-2 gap-5">
-                    <Field className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-5 md:flex-row md:items-end md:gap-5">
+                    <Field className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Vehicle Category
                       </FieldLabel>
@@ -1090,7 +1154,7 @@ export function BookingForm() {
                         </Select>
                       </FieldContent>
                     </Field>
-                    <Field className="flex flex-col gap-1.5">
+                    <Field className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Vehicle
                       </FieldLabel>
@@ -1119,89 +1183,95 @@ export function BookingForm() {
                         </Select>
                       </FieldContent>
                     </Field>
+                    <Field className="flex min-w-0 shrink-0 flex-col gap-1.5 md:w-[11.5rem]">
+                      <FieldLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Number of vehicles
+                      </FieldLabel>
+                      <FieldContent>
+                        <InlineQuantityStepper
+                          value={sr.numberOfVehicles ?? 0}
+                          onChange={(v) => srForm.setValue('numberOfVehicles', v)}
+                        />
+                      </FieldContent>
+                    </Field>
                   </div>
 
-                  <CounterRow
-                    label="Number of Vehicles"
-                    value={sr.numberOfVehicles ?? 0}
-                    onChange={(v) => srForm.setValue('numberOfVehicles', v)}
-                  />
-
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      Passengers
-                    </p>
-                    <div className="flex flex-col gap-3 border border-border p-4">
-                      <CounterRow
-                        label="Adults"
-                        value={sr.passengers?.adults ?? 0}
-                        onChange={(v) =>
-                          srForm.setValue('passengers', {
-                            adults: v,
-                            children: sr.passengers?.children ?? 0,
-                          })
-                        }
-                      />
-                      <CounterRow
-                        label="Children"
-                        value={sr.passengers?.children ?? 0}
-                        onChange={(v) =>
-                          srForm.setValue('passengers', {
-                            adults: sr.passengers?.adults ?? 0,
-                            children: v,
-                          })
-                        }
-                      />
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Passengers
+                      </p>
+                      <div className="flex flex-col gap-3 border border-border p-4">
+                        <CounterRow
+                          label="Adults"
+                          value={sr.passengers?.adults ?? 0}
+                          onChange={(v) =>
+                            srForm.setValue('passengers', {
+                              adults: v,
+                              children: sr.passengers?.children ?? 0,
+                            })
+                          }
+                        />
+                        <CounterRow
+                          label="Children"
+                          value={sr.passengers?.children ?? 0}
+                          onChange={(v) =>
+                            srForm.setValue('passengers', {
+                              adults: sr.passengers?.adults ?? 0,
+                              children: v,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      Luggage
-                    </p>
-                    <div className="flex flex-col gap-3 border border-border p-4">
-                      <CounterRow
-                        label="Large"
-                        value={sr.luggage?.large ?? 0}
-                        onChange={(v) =>
-                          srForm.setValue('luggage', {
-                            large: v,
-                            medium: sr.luggage?.medium ?? 0,
-                            small: sr.luggage?.small ?? 0,
-                          })
-                        }
-                      />
-                      <CounterRow
-                        label="Medium"
-                        value={sr.luggage?.medium ?? 0}
-                        onChange={(v) =>
-                          srForm.setValue('luggage', {
-                            large: sr.luggage?.large ?? 0,
-                            medium: v,
-                            small: sr.luggage?.small ?? 0,
-                          })
-                        }
-                      />
-                      <CounterRow
-                        label="Small"
-                        value={sr.luggage?.small ?? 0}
-                        onChange={(v) =>
-                          srForm.setValue('luggage', {
-                            large: sr.luggage?.large ?? 0,
-                            medium: sr.luggage?.medium ?? 0,
-                            small: v,
-                          })
-                        }
-                      />
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Luggage
+                      </p>
+                      <div className="flex flex-col gap-3 border border-border p-4">
+                        <CounterRow
+                          label="Large"
+                          value={sr.luggage?.large ?? 0}
+                          onChange={(v) =>
+                            srForm.setValue('luggage', {
+                              large: v,
+                              medium: sr.luggage?.medium ?? 0,
+                              small: sr.luggage?.small ?? 0,
+                            })
+                          }
+                        />
+                        <CounterRow
+                          label="Medium"
+                          value={sr.luggage?.medium ?? 0}
+                          onChange={(v) =>
+                            srForm.setValue('luggage', {
+                              large: sr.luggage?.large ?? 0,
+                              medium: v,
+                              small: sr.luggage?.small ?? 0,
+                            })
+                          }
+                        />
+                        <CounterRow
+                          label="Small"
+                          value={sr.luggage?.small ?? 0}
+                          onChange={(v) =>
+                            srForm.setValue('luggage', {
+                              large: sr.luggage?.large ?? 0,
+                              medium: sr.luggage?.medium ?? 0,
+                              small: v,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {resources.beverageOptions.length > 0 && (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                       <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Beverages
                       </p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-3">
                         {resources.beverageOptions.map((bev) => {
                           const selected = (sr.beverages ?? []).includes(bev)
                           return (
@@ -1217,10 +1287,10 @@ export function BookingForm() {
                                 )
                               }
                               className={cn(
-                                'border px-3 py-1.5 text-xs font-medium transition-colors',
+                                'min-h-11 min-w-fit border px-4 py-2.5 text-sm font-medium transition-colors',
                                 selected
                                   ? 'border-primary bg-primary/10 text-primary'
-                                  : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                  : 'border-border text-foreground hover:bg-muted/60'
                               )}
                             >
                               {bev}
