@@ -110,7 +110,39 @@ function SectionTitle({ children, className }: { children: React.ReactNode; clas
   )
 }
 
-function InfoField({ label, value }: { label: string; value: React.ReactNode }) {
+function formatHmTo12h(raw: string | null | undefined): string | null {
+  if (raw == null || String(raw).trim() === '') return null
+  const s = String(raw).trim()
+  const [hPart, mPart] = s.split(':')
+  const h = Number.parseInt(hPart, 10)
+  const m = Number.parseInt((mPart ?? '0').slice(0, 2), 10)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return s.slice(0, 8)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`
+}
+
+function InfoField({
+  label,
+  value,
+  snapshot,
+}: {
+  label: string
+  value: React.ReactNode
+  snapshot?: boolean
+}) {
+  if (snapshot) {
+    return (
+      <div className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+        <p className="shrink-0 pt-px text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
+        <div className="min-w-0 flex-1 text-right text-sm font-medium leading-snug text-foreground break-words">
+          {value ?? <span className="text-muted-foreground">—</span>}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-1">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1070,22 +1102,23 @@ export function BookingDetail() {
                 </Button>
               </DisableWithTooltip>
             </div>
-            <div className="grid grid-cols-1 gap-y-5 sm:grid-cols-2 xl:grid-cols-3 sm:gap-x-8">
-              <InfoField label="Ride Date" value={booking.rideDate} />
-              <InfoField label="Pickup Time" value={booking.pickupTime?.slice(0, 5)} />
-              <InfoField label="Source" value={booking.bookingSource} />
-              <InfoField label="Customer" value={booking.metadata.customerName} />
-              <InfoField label="Contact" value={booking.metadata.customerContact} />
-              <InfoField label="Type" value={booking.metadata.customerType} />
-              <InfoField label="Remarks" value={booking.metadata.remarks ?? null} />
+            <div className="flex flex-col divide-y divide-border border-t border-border">
+              <InfoField snapshot label="Ride date" value={booking.rideDate} />
+              <InfoField snapshot label="Pickup time" value={formatHmTo12h(booking.pickupTime)} />
+              <InfoField snapshot label="Source" value={booking.bookingSource} />
+              <InfoField snapshot label="Customer" value={booking.metadata.customerName} />
+              <InfoField snapshot label="Contact" value={booking.metadata.customerContact} />
+              <InfoField snapshot label="Type" value={booking.metadata.customerType} />
+              <InfoField snapshot label="Remarks" value={booking.metadata.remarks ?? null} />
               {booking.tripType === TripType.AIRPORT_TRANSFER && (
                 <>
-                  <InfoField label="Flight Type" value={booking.metadata.flightType} />
-                  <InfoField label="Flight No" value={booking.metadata.flightNo} />
+                  <InfoField snapshot label="Flight type" value={booking.metadata.flightType} />
+                  <InfoField snapshot label="Flight no" value={booking.metadata.flightNo} />
                 </>
               )}
               {booking.tripType === TripType.HOURLY_RENTALS && (
                 <InfoField
+                  snapshot
                   label="Package"
                   value={
                     booking.hourlyPackage
@@ -1115,22 +1148,22 @@ export function BookingDetail() {
                 </Button>
               </DisableWithTooltip>
             </div>
-            <div className="grid grid-cols-1 gap-y-5 sm:grid-cols-2 sm:gap-x-8">
-              <InfoField label="Vehicle category" value={sr?.vehicleCategory} />
-              <InfoField label="Vehicle" value={sr?.vehicle} />
-              <InfoField label="Fleet size" value={String(sr?.numberOfVehicles ?? 0)} />
+            <div className="flex flex-col divide-y divide-border border-t border-border">
+              <InfoField snapshot label="Vehicle category" value={sr?.vehicleCategory} />
+              <InfoField snapshot label="Vehicle" value={sr?.vehicle} />
+              <InfoField snapshot label="Fleet size" value={String(sr?.numberOfVehicles ?? 0)} />
               <InfoField
+                snapshot
                 label="Passengers"
                 value={`Adults ${sr?.passengers?.adults ?? 0} · Children ${sr?.passengers?.children ?? 0}`}
               />
               <InfoField
+                snapshot
                 label="Luggage"
                 value={`Large ${sr?.luggage?.large ?? 0} · Medium ${sr?.luggage?.medium ?? 0} · Small ${sr?.luggage?.small ?? 0}`}
               />
-              <InfoField label="Beverages" value={specialRequestBeveragesLine} />
-              <div className="sm:col-span-2">
-                <InfoField label="Other notes" value={sr?.other} />
-              </div>
+              <InfoField snapshot label="Beverages" value={specialRequestBeveragesLine} />
+              <InfoField snapshot label="Other notes" value={sr?.other} />
             </div>
           </CardContent>
         </Card>
@@ -1138,9 +1171,10 @@ export function BookingDetail() {
         <Card>
           <CardContent>
             <SectionTitle>Financials</SectionTitle>
-            <div className="grid grid-cols-1 gap-y-5 sm:grid-cols-2 xl:grid-cols-3 sm:gap-x-8">
+            <div className="flex flex-col divide-y divide-border border-t border-border">
               <InfoField
-                label="Estimated Fare"
+                snapshot
+                label="Estimated fare"
                 value={
                   booking.estimatedFare != null
                     ? `₹${booking.estimatedFare.toLocaleString('en-IN')}`
@@ -1148,7 +1182,8 @@ export function BookingDetail() {
                 }
               />
               <InfoField
-                label="Actual Fare"
+                snapshot
+                label="Actual fare"
                 value={
                   booking.actualFare != null
                     ? `₹${booking.actualFare.toLocaleString('en-IN')}`
@@ -1156,12 +1191,14 @@ export function BookingDetail() {
                 }
               />
               <InfoField
-                label="Total Fare"
+                snapshot
+                label="Total fare"
                 value={
                   booking.totalFare != null ? `₹${booking.totalFare.toLocaleString('en-IN')}` : null
                 }
               />
               <InfoField
+                snapshot
                 label="Advance"
                 value={
                   booking.advanceAmount != null
@@ -1170,6 +1207,7 @@ export function BookingDetail() {
                 }
               />
               <InfoField
+                snapshot
                 label="Balance"
                 value={
                   booking.balanceAmount != null
@@ -1177,7 +1215,7 @@ export function BookingDetail() {
                     : null
                 }
               />
-              <InfoField label="Payment Mode" value={booking.paymentMode} />
+              <InfoField snapshot label="Payment mode" value={booking.paymentMode} />
             </div>
           </CardContent>
         </Card>

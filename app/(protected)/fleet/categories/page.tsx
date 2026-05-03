@@ -10,13 +10,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
+import { FleetTableThumb } from '../fleet-table-thumb'
 import { CategoryFormSheet } from './category-form-sheet'
 import { CategoryActiveBadge } from './category-badges'
 import { getCategories, toggleCategoryStatus } from './api'
 import type { TCategory } from './types'
 import { getApiErrorMessage } from '@/helper/api-error-message'
 
-const COLUMNS = ['Category', 'Base price (₹)', 'Status']
+const COLUMNS = ['Photo', 'Category', 'Base price (₹)', 'Status']
 
 export default function FleetCategoriesPage() {
   const [list, setList] = useState<TCategory[]>([])
@@ -209,7 +210,10 @@ export default function FleetCategoriesPage() {
                       onClick={() => openEditCategory(c.id)}
                       className="cursor-pointer border-b border-border/50 last:border-0 transition-colors hover:bg-muted/30"
                     >
-                      <td className="py-3 pr-6">
+                      <td className="py-3 pr-4 align-middle">
+                        <FleetTableThumb src={c.imageUrl} alt={c.categoryName} />
+                      </td>
+                      <td className="py-3 pr-6 align-middle">
                         <p className="font-medium">{c.categoryName}</p>
                         <p className="text-xs text-muted-foreground">ID {c.id}</p>
                       </td>

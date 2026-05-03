@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { CarIcon, PlusIcon } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { FleetTableThumb } from '../fleet-table-thumb'
 import { getCategories } from '../categories/api'
 import { getVehicles } from './api'
 import type { TCategory } from '../categories/types'
@@ -13,7 +14,7 @@ import type { TVehicle } from './types'
 import { getApiErrorMessage } from '@/helper/api-error-message'
 import { VehicleAvailableBadge } from './vehicle-badges'
 
-const COLS = ['Vehicle', 'Category', 'Fuel', 'Seats', 'Status']
+const COLS = ['Photo', 'Vehicle', 'Category', 'Fuel', 'Seats', 'Status']
 
 export default function FleetVehiclesPage() {
   const router = useRouter()
@@ -112,7 +113,13 @@ export default function FleetVehiclesPage() {
                       onClick={() => router.push(`/fleet/vehicles/details?id=${v.id}`)}
                       className="cursor-pointer border-b border-border/50 last:border-0 transition-colors hover:bg-muted/30"
                     >
-                      <td className="py-3 pr-6">
+                      <td className="py-3 pr-4 align-middle">
+                        <FleetTableThumb
+                          src={v.imageUrl}
+                          alt={`${v.brand} ${v.model}`.trim() || v.vehicleNumber}
+                        />
+                      </td>
+                      <td className="py-3 pr-6 align-middle">
                         <p className="font-medium tabular-nums">{v.vehicleNumber}</p>
                         <p className="text-xs text-muted-foreground">
                           {v.brand} {v.model}

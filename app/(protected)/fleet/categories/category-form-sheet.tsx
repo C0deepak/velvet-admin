@@ -7,6 +7,7 @@ import { Field, FieldContent, FieldError, FieldLabel } from '@/components/ui/fie
 import { InputGroup, InputGroupInput } from '@/components/ui/input-group'
 import { Slider } from '@/components/ui/slider'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { ImageUploader } from '@/components/ui/image-uploader'
 import { cn } from '@/lib/utils'
 import { categoryBasicsTabSchema, categoryHourlyTabSchema } from './schema'
 import type {
@@ -366,21 +367,14 @@ export function CategoryFormSheet({
                   Image
                 </FieldLabel>
                 <FieldContent>
-                  <InputGroup className="w-full">
-                    <InputGroupInput
-                      type="file"
-                      accept="image/*"
-                      disabled={imgBusy}
-                      className="cursor-pointer text-xs file:cursor-pointer"
-                      onChange={(e) => void onPickImage(e.target.files?.[0] ?? null)}
-                    />
-                  </InputGroup>
-                  {imgBusy && <p className="text-[10px] text-muted-foreground">Uploading…</p>}
-                  {imgUrl && typeof imgUrl === 'string' && imgUrl.length > 0 && (
-                    <p className="mt-1 truncate text-[10px] text-muted-foreground" title={imgUrl}>
-                      {imgUrl.length > 72 ? `${imgUrl.slice(0, 72)}…` : imgUrl}
-                    </p>
-                  )}
+                  <ImageUploader
+                    value={imgUrl}
+                    busy={imgBusy}
+                    previewAlt=""
+                    emptyHint="No category image"
+                    onFileSelected={(file) => void onPickImage(file)}
+                  />
+                  <FieldError errors={fieldErrFmt(form, 'imageUrl')} />
                 </FieldContent>
               </Field>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

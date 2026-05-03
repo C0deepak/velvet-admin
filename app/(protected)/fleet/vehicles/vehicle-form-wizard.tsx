@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
+import { ImageUploader } from '@/components/ui/image-uploader'
 import { FlowStepBar } from '../../bookings/booking-badges'
 import {
   FuelType,
@@ -619,27 +620,13 @@ export function VehicleFormWizard({ mode, vehicleId, onSaved }: VehicleFormWizar
                   <FieldLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Vehicle photo (optional)
                   </FieldLabel>
-                  <InputGroup className="w-full">
-                    <InputGroupInput
-                      type="file"
-                      accept="image/*"
-                      disabled={imgBusy}
-                      className="cursor-pointer text-xs file:cursor-pointer"
-                      onChange={(e) => void onPickImage(e.target.files?.[0] ?? null)}
-                    />
-                  </InputGroup>
-                  {imgBusy && <p className="text-[10px] text-muted-foreground">Uploading…</p>}
-                  {imageUrlWatch &&
-                    typeof imageUrlWatch === 'string' &&
-                    imageUrlWatch.length > 0 && (
-                      <p
-                        className="truncate text-[10px] text-muted-foreground"
-                        title={imageUrlWatch}
-                      >
-                        Linked: {imageUrlWatch.slice(0, 56)}
-                        {imageUrlWatch.length > 56 ? '…' : ''}
-                      </p>
-                    )}
+                  <ImageUploader
+                    value={imageUrlWatch}
+                    busy={imgBusy}
+                    previewAlt=""
+                    emptyHint="No vehicle photo"
+                    onFileSelected={(file) => void onPickImage(file)}
+                  />
                   <FieldError errors={fieldErr(form, 'imageUrl')} />
                 </Field>
               </div>
